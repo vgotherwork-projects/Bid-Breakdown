@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0b1f3a">
+    <title>Employee Cost &amp; Bid Calculator</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="appbar">
+    <div class="appbar-inner">
+        <div class="brand">
+            <span class="brand-mark" aria-hidden="true">₹</span>
+            <div class="brand-text">
+                <strong>Cost &amp; Bid Calculator</strong>
+                <span>CTC breakdown · PTO · gratuity · billing rate</span>
+            </div>
+        </div>
+        <button type="button" id="resetBtn" class="btn ghost">Reset</button>
+    </div>
+</header>
+
+<main class="layout">
+    <section class="card inputs-card" aria-labelledby="inputsTitle">
+        <div class="card-head">
+            <h2 id="inputsTitle">Inputs</h2>
+        </div>
+        <div class="card-body">
+            <label class="field">
+                <span>Employee name</span>
+                <input type="text" id="name" value="Employee" autocomplete="off" />
+            </label>
+
+            <div class="grid-2">
+                <label class="field">
+                    <span>Annual CTC</span>
+                    <input type="number" id="ctc" value="1200000" min="1" step="1000" inputmode="numeric" />
+                </label>
+                <label class="field">
+                    <span>Currency</span>
+                    <input type="text" id="currency" value="INR" maxlength="3" autocomplete="off" />
+                </label>
+            </div>
+
+            <div class="grid-2">
+                <label class="field">
+                    <span>Employment type</span>
+                    <select id="employment_type">
+                        <option value="new_hire">New hire</option>
+                        <option value="existing">Existing employee</option>
+                    </select>
+                </label>
+                <label class="field" id="dojField">
+                    <span>Date of joining</span>
+                    <input type="date" id="date_of_joining" />
+                </label>
+            </div>
+
+            <div class="grid-2">
+                <label class="field">
+                    <span>Annual working hours</span>
+                    <input type="number" id="annual_hours" value="1880" min="1" step="1" inputmode="numeric" />
+                </label>
+                <label class="field">
+                    <span>Markup %</span>
+                    <input type="number" id="markup_pct" value="25" min="0" step="0.5" inputmode="decimal" />
+                </label>
+            </div>
+
+            <p id="errorMsg" class="error hidden" role="alert"></p>
+            <p class="meta-note" id="metaNote"></p>
+        </div>
+    </section>
+
+    <section class="card result-card" aria-labelledby="resultTitle">
+        <div class="card-head">
+            <h2 id="resultTitle">Breakdown</h2>
+            <span id="totalBadge" class="total-badge">—</span>
+        </div>
+        <div class="card-body">
+            <div id="billingRate" class="billing-rate hidden"></div>
+
+            <div class="table-wrap">
+                <table class="breakdown-table">
+                    <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th class="num">Monthly</th>
+                        <th class="num">Annual</th>
+                        <th class="num">Per hour</th>
+                    </tr>
+                    </thead>
+                    <tbody id="breakdownBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</main>
+
+<footer class="appfoot">
+    <span>Figures are indicative. Statutory rules (PF, gratuity) are simplified for estimation.</span>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>
