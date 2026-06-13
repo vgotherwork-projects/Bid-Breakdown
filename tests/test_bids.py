@@ -195,6 +195,31 @@ def test_endpoint_calculates():
     assert grand["annual"] == round(1_200_000 + pto + gratuity, 2)
 
 
+def test_export_csv():
+    res = client.post(
+        "/bids/export/csv",
+        json={"name": "Asha Rao", "ctc": 1200000, "employment_type": "new_hire"},
+    )
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/csv")
+    assert "asha-rao-breakdown.csv" in res.headers["content-disposition"]
+    body = res.text
+    assert "Component,Monthly,Annual,Per hour" in body
+    assert "Grand Total" in body
+    assert "Billing rate per hour" in body
+
+
+def test_export_pdf():
+    res = client.post(
+        "/bids/export/pdf",
+        json={"name": "Asha Rao", "ctc": 1200000, "employment_type": "new_hire"},
+    )
+    assert res.status_code == 200
+    assert res.headers["content-type"] == "application/pdf"
+    assert "asha-rao-breakdown.pdf" in res.headers["content-disposition"]
+    assert res.content[:5] == b"%PDF-"
+
+
 def test_endpoint_existing_requires_doj():
     res = client.post(
         "/bids/calculate",

@@ -2,6 +2,8 @@ fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.4
 pydantic-settings==2.7.1
+fpdf2==2.8.7
+pillow==12.2.0
 
 # Dev/test
 pytest==8.3.4

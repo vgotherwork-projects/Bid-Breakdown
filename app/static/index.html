@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0b1f3a">
     <title>Employee Cost &amp; Bid Calculator</title>
-    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/styles.css?v=2">
 </head>
 <body>
 <header class="appbar">
     <div class="appbar-inner">
         <div class="brand">
-            <span class="brand-mark" aria-hidden="true">₹</span>
+            <span class="brand-mark"><img src="/logo-mark.png" alt="STG logo" width="34" height="34" /></span>
             <div class="brand-text">
                 <strong>Cost &amp; Bid Calculator</strong>
                 <span>CTC breakdown · PTO · gratuity · billing rate</span>
@@ -68,6 +68,11 @@
                 </label>
             </div>
 
+            <div class="form-actions">
+                <button type="button" id="clearBtn" class="btn outline">Clear</button>
+                <button type="button" id="submitBtn" class="btn primary">Submit</button>
+            </div>
+
             <p id="errorMsg" class="error hidden" role="alert"></p>
             <p class="meta-note" id="metaNote"></p>
         </div>
@@ -76,7 +81,11 @@
     <section class="card result-card" aria-labelledby="resultTitle">
         <div class="card-head">
             <h2 id="resultTitle">Breakdown</h2>
-            <span id="totalBadge" class="total-badge">—</span>
+            <div class="head-actions">
+                <span id="totalBadge" class="total-badge">—</span>
+                <button type="button" id="exportCsvBtn" class="btn small" disabled>CSV</button>
+                <button type="button" id="exportPdfBtn" class="btn small" disabled>PDF</button>
+            </div>
         </div>
         <div class="card-body">
             <div id="billingRate" class="billing-rate hidden"></div>
@@ -102,6 +111,6 @@
     <span>Figures are indicative. Statutory rules (PF, gratuity) are simplified for estimation.</span>
 </footer>
 
-<script src="/app.js"></script>
+<script src="/app.js?v=2"></script>
 </body>
 </html>

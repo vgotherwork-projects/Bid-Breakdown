@@ -1,7 +1,9 @@
 const els = {};
-["name", "ctc", "currency", "employment_type", "date_of_joining", "annual_hours", "markup_pct", "errorMsg", "metaNote", "totalBadge", "breakdownBody", "billingRate", "dojField", "resetBtn"].forEach(
+["name", "ctc", "currency", "employment_type", "date_of_joining", "annual_hours", "markup_pct", "errorMsg", "metaNote", "totalBadge", "breakdownBody", "billingRate", "dojField", "resetBtn", "exportCsvBtn", "exportPdfBtn", "clearBtn", "submitBtn"].forEach(
     (id) => (els[id] = document.getElementById(id))
 );
+
+let lastValidPayload = null;
 
 const DEFAULTS = {
     name: "Employee",
@@ -52,10 +54,12 @@ async function calculate() {
     const payload = readInputs();
     if (!payload.ctc || payload.ctc <= 0) {
         showError("Enter an annual CTC greater than 0.");
+        setExportEnabled(false);
         return;
     }
     if (payload.employment_type === "existing" && !payload.date_of_joining) {
         showError("Select a date of joining for an existing employee.");
+        setExportEnabled(false);
         return;
     }
     try {
@@ -70,8 +74,49 @@ async function calculate() {
         }
         els.errorMsg.classList.add("hidden");
         render(await res.json());
+        lastValidPayload = payload;
+        setExportEnabled(true);
     } catch (err) {
         showError(err.message || "Calculation failed");
+        setExportEnabled(false);
+    }
+}
+
+function setExportEnabled(enabled) {
+    els.exportCsvBtn.disabled = !enabled;
+    els.exportPdfBtn.disabled = !enabled;
+}
+
+async function exportBreakdown(format) {
+    if (!lastValidPayload) return;
+    const btn = format === "csv" ? els.exportCsvBtn : els.exportPdfBtn;
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "...";
+    try {
+        const res = await fetch(`/bids/export/${format}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(lastValidPayload),
+        });
+        if (!res.ok) throw new Error("Export failed");
+        const blob = await res.blob();
+        const disposition = res.headers.get("Content-Disposition") || "";
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        const filename = match ? match[1] : `breakdown.${format}`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        showError(err.message || "Export failed");
+    } finally {
+        btn.textContent = original;
+        btn.disabled = false;
     }
 }
 
@@ -142,6 +187,25 @@ els.employment_type.addEventListener("change", () => {
 ["name", "ctc", "currency", "date_of_joining", "annual_hours", "markup_pct"].forEach((id) =>
     els[id].addEventListener("input", scheduleCalc)
 );
+els.exportCsvBtn.addEventListener("click", () => exportBreakdown("csv"));
+els.exportPdfBtn.addEventListener("click", () => exportBreakdown("pdf"));
+els.submitBtn.addEventListener("click", calculate);
+els.clearBtn.addEventListener("click", clearInputs);
+
+function clearInputs() {
+    els.name.value = "";
+    els.ctc.value = "";
+    els.date_of_joining.value = "";
+    lastValidPayload = null;
+    setExportEnabled(false);
+    els.breakdownBody.innerHTML = "";
+    els.billingRate.classList.add("hidden");
+    els.billingRate.innerHTML = "";
+    els.metaNote.innerHTML = "";
+    els.totalBadge.textContent = "—";
+    els.errorMsg.classList.add("hidden");
+    els.name.focus();
+}
 els.resetBtn.addEventListener("click", () => {
     els.name.value = DEFAULTS.name;
     els.ctc.value = DEFAULTS.ctc;
