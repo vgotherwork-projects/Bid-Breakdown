@@ -180,6 +180,21 @@ def test_pto_is_15_days_under_5_years():
     assert b.pto_days == 15
 
 
+def test_recent_existing_employee_gets_min_one_year_gratuity():
+    # Joined ~4 months ago: completed years round down to 0, but gratuity
+    # must treat any such joiner as a 1-year joiner (never zero).
+    bid = EmployeeBidInput(
+        ctc=1_200_000,
+        employment_type="existing",
+        date_of_joining=date(2023, 9, 1),
+        as_of_date=date(2024, 1, 1),
+    )
+    b = calculate_employee_bid(bid)
+    assert gratuity_tenure_years(date(2023, 9, 1), date(2024, 1, 1)) == 0
+    assert b.gratuity_years == 1
+    assert rows_by_key(b)["gratuity"].annual == round(27588 * 1 * (15 / 26), 2)
+
+
 def test_endpoint_calculates():
     res = client.post(
         "/bids/calculate",

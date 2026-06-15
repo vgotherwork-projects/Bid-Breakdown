@@ -93,7 +93,9 @@ def calculate_employee_bid(bid: EmployeeBidInput) -> EmployeeBidBreakdown:
     if bid.employment_type == EmploymentType.existing:
         effective_doj = bid.date_of_joining  # guaranteed by validator
         tenure = tenure_years(effective_doj, as_of)
-        gratuity_tenure = gratuity_tenure_years(effective_doj, as_of)
+        # Recent joiners can round down to 0 completed years; gratuity treats
+        # any such employee as a 1-year joiner so gratuity is never zero.
+        gratuity_tenure = max(gratuity_tenure_years(effective_doj, as_of), 1)
     else:
         # New hires have no service history yet; tenure defaults to 1 year.
         effective_doj = as_of
