@@ -5,16 +5,18 @@ from fastapi import APIRouter, Response
 
 from ..bid_schemas import EmployeeBidBreakdown, EmployeeBidInput
 from ..calculator import calculate_employee_bid
-from ..exporters import breakdown_to_csv, breakdown_to_pdf
+from ..exporters import breakdown_to_pdf, breakdown_to_xlsx
 
 router = APIRouter(prefix="/bids", tags=["bids"])
 
+XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
 
 def _filename(name: str, ext: str) -> str:
-    # Mirror the workbook convention: "<Name> Bid Breakdown <Mon D, YYYY>.<ext>".
+    # Naming convention: "<Employee Name>_Bid Breakdown_<Mon D, YYYY>.<ext>".
     clean = re.sub(r'[\\/:*?"<>|]+', " ", name).strip()
     clean = re.sub(r"\s+", " ", clean) or "Employee"
-    return f"{clean} Bid Breakdown {date.today():%b %d, %Y}.{ext}"
+    return f"{clean}_Bid Breakdown_{date.today():%b %d, %Y}.{ext}"
 
 
 @router.post("/calculate", response_model=EmployeeBidBreakdown)
@@ -23,12 +25,12 @@ def calculate(bid: EmployeeBidInput) -> EmployeeBidBreakdown:
     return calculate_employee_bid(bid)
 
 
-@router.post("/export/csv")
-def export_csv(bid: EmployeeBidInput) -> Response:
+@router.post("/export/xlsx")
+def export_xlsx(bid: EmployeeBidInput) -> Response:
     breakdown = calculate_employee_bid(bid)
-    content = breakdown_to_csv(breakdown)
-    headers = {"Content-Disposition": f'attachment; filename="{_filename(breakdown.name, "csv")}"'}
-    return Response(content=content, media_type="text/csv", headers=headers)
+    content = breakdown_to_xlsx(breakdown)
+    headers = {"Content-Disposition": f'attachment; filename="{_filename(breakdown.name, "xlsx")}"'}
+    return Response(content=content, media_type=XLSX_MEDIA_TYPE, headers=headers)
 
 
 @router.post("/export/pdf")

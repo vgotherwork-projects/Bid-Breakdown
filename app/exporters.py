@@ -1,10 +1,11 @@
-"""CSV and PDF renderers for an employee bid breakdown."""
-import csv
+"""Excel (.xlsx) and PDF renderers for an employee bid breakdown."""
 import io
 from functools import lru_cache
 from pathlib import Path
 
 from fpdf import FPDF
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from PIL import Image, ImageChops
 
 from .bid_schemas import EmployeeBidBreakdown, EmploymentType
@@ -52,79 +53,121 @@ def _country(currency: str) -> str:
     return "India" if currency.upper() == "INR" else currency
 
 
-def _num(value: float) -> str:
-    """Match the template: a bare 0 for empty lines, 2 decimals otherwise."""
-    return "0" if round(value, 2) == 0 else f"{value:.2f}"
+# Styling for the .xlsx template (Aptos 10pt). Colours are the workbook's
+# theme colours expressed as explicit aRGB: black banner, light-grey labels,
+# and Accent-6 (green) value cells in "lighter 60%/80%" tints.
+_FONT = "Aptos"
+_BLACK = "FF000000"
+_WHITE = "FFFFFFFF"
+_GRAY = "FFF2F2F2"        # white, 5% darker (theme 0, tint -0.05)
+_GREEN6 = "FFC6E0B4"      # accent 6, lighter 60%
+_GREEN8 = "FFE2EFDA"      # accent 6, lighter 80%
+_THIN = Side(style="thin", color=_BLACK)
+_BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
 
 
-def breakdown_to_csv(b: EmployeeBidBreakdown) -> str:
-    """Render the breakdown in the STG 'Worker Specific Costs' hourly template.
+def breakdown_to_xlsx(b: EmployeeBidBreakdown) -> bytes:
+    """Render the breakdown as a styled .xlsx mirroring the STG workbook.
 
-    The reference workbook places the label in column B, the hourly (currency)
-    value in column C, and a one-off note in column D, with a fixed list of
-    allowance lines. Our calculated components map onto that list; anything we do
-    not model is emitted as 0 so the file lines up with the sheet.
+    Labels sit in column B, the hourly (currency) value in column C, and a
+    one-off note in column D. Our calculated components map onto the template's
+    fixed allowance list; anything we do not model is emitted as 0.
     """
     rk = {row.key: row for row in b.rows}
 
-    def hourly(key: str) -> float:
+    def hourly(key: str):
         row = rk.get(key)
-        return row.hourly if row else 0.0
+        return round(row.hourly, 2) if row else 0
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Bid Breakdown"
+    ws.column_dimensions["B"].width = 31.0
+    ws.column_dimensions["C"].width = 21.63
+
+    def put(coord, value, *, fill=None, bold=False, italic=False,
+            center=False, border=True, numfmt=None, color=_BLACK):
+        cell = ws[coord]
+        cell.value = value
+        cell.font = Font(name=_FONT, size=10, bold=bold, italic=italic, color=color)
+        if fill:
+            cell.fill = PatternFill(fill_type="solid", fgColor=fill)
+        if border:
+            cell.border = _BORDER
+        if center:
+            cell.alignment = Alignment(horizontal="center")
+        if numfmt:
+            cell.number_format = numfmt
+        return cell
 
     placement = (
         "New Placement"
         if b.employment_type == EmploymentType.new_hire
         else "Existing Placement"
     )
+    hours = int(b.annual_hours) if float(b.annual_hours).is_integer() else b.annual_hours
 
-    def line(*cells: tuple[int, str]) -> list[str]:
-        """Build a row from (1-based column, value) pairs, trimmed to the last one."""
-        width = max((col for col, _ in cells), default=0)
-        out = [""] * width
-        for col, val in cells:
-            out[col - 1] = val
-        return out
+    # Banner + meta block (rows 2-7). Style both merged cells, then merge.
+    put("B2", placement, fill=_BLACK, bold=True, center=True, color=_WHITE)
+    put("C2", None, fill=_BLACK)
+    ws.merge_cells("B2:C2")
+    put("B3", _country(b.currency), fill=_GRAY, center=True)
+    put("C3", None, fill=_GRAY)
+    ws.merge_cells("B3:C3")
+    put("B4", "Supplier Name", fill=_GRAY)
+    put("C4", SUPPLIER_NAME, fill=_GREEN6, bold=True, center=True)
+    put("B5", "Worker Name", fill=_GRAY)
+    put("C5", b.name, fill=_GREEN6, bold=True, center=True)
+    put("B6", "Max Annual Hours", fill=_GRAY)
+    put("C6", hours, fill=_GRAY, bold=True, center=True)
+    put("B7", "Worker Specific Costs*", fill=_GRAY)
+    put("C7", f"Hourly ({_symbol(b.currency)})", fill=_GRAY, bold=True, center=True)
 
-    grid: list[list[str]] = []
-    grid.extend([[]] * 4)  # rows 1-4 (blank)
-    grid.append(line((3, placement)))                                                  # 5
-    grid.append(line((3, _country(b.currency))))                                       # 6
-    grid.append(line((2, "Supplier Name:"), (3, SUPPLIER_NAME)))                       # 7
-    grid.append(line((2, "Worker Name:"), (3, b.name)))                               # 8
-    grid.append(line((2, "Max Annual Hours"), (3, f"{b.annual_hours:g}")))            # 9
-    grid.append(line((2, "Worker Specific Costs*"), (3, f"Hourly ({_symbol(b.currency)})")))  # 10
-    grid.append(line((2, "Worker Payroll (Basic)"), (3, _num(hourly("basic")))))       # 11
-    grid.append(line((2, "House Rent Allowance (HRA)"), (3, _num(hourly("hra")))))    # 12
-    grid.append(line((2, "Gratuity"), (3, _num(hourly("gratuity"))), (4, "Onetime")))  # 13
-    grid.append(line((2, "Provident Fund (PF) - Employers Cont."), (3, _num(hourly("employer_pf")))))      # 14
-    grid.append(line((2, "Bonus"), (3, "0")))                                          # 15
-    grid.append(line((2, "Paid Time Off"), (3, _num(hourly("pto"))), (4, "Onetime")))  # 16
-    grid.append(line((2, "Health Insurance & Life Insurance"), (3, _num(hourly("medical")))))              # 17
-    grid.append(line((2, "Driver Allowance"), (3, "0")))                               # 18
-    grid.append(line((2, "Stationary Allowance"), (3, "0")))                           # 19
-    grid.append(line((2, "Meal Allowance / Coupons"), (3, "0")))                       # 20
-    grid.append(line((2, "Transport Allowance"), (3, _num(hourly("conveyance")))))     # 21
-    grid.append(line((2, "Internet Allowance"), (3, "0")))                             # 22
-    grid.append(line((2, "Phone Allowance"), (3, "0")))                                # 23
-    grid.append(line((2, "Vehicle / Fuel Allowance"), (3, "0")))                       # 24
-    grid.append(line((2, "Other Worker Specific Cost 1"), (3, _num(hourly("special_pay")))))               # 25
-    grid.append(line((2, "Other Worker Specific Cost 2"), (3, "0")))                   # 26
-    grid.append(line((2, "CTC"), (3, _num(hourly("grand_total")))))                    # 27
-    grid.append(line((2, "Customer Charge Rate (bid rate)"), (3, _num(b.billing_rate_per_hour))))          # 28
-    grid.append(line((2, "Mark-up"), (3, f"{b.markup_pct / 100:.2f}")))                # 29
+    # Component lines: (row, label, value, value-fill, one-off note).
+    lines = [
+        (8, "Worker Payroll (Basic)", hourly("basic"), _GREEN6, None),
+        (9, "House Rent Allowance (HRA)", hourly("hra"), _GREEN6, None),
+        (10, "Gratuity", hourly("gratuity"), _GREEN8, "Onetime"),
+        (11, "Provident Fund (PF) - Employers Cont.", hourly("employer_pf"), _GREEN6, None),
+        (12, "Bonus", 0, _GREEN8, None),
+        (13, "Paid Time Off", hourly("pto"), _GREEN8, "Onetime"),
+        (14, "Health Insurance & Life Insurance", hourly("medical"), _GREEN8, None),
+        (15, "Driver Allowance", 0, _GREEN8, None),
+        (16, "Stationary Allowance", 0, _GREEN8, None),
+        (17, "Meal Allowance / Coupons", 0, _GREEN8, None),
+        (18, "Transport Allowance", hourly("conveyance"), _GREEN8, None),
+        (19, "Internet Allowance", 0, _GREEN8, None),
+        (20, "Phone Allowance", 0, _GREEN8, None),
+        (21, "Vehicle / Fuel Allowance", 0, _GREEN8, None),
+        (22, "Other Worker Specific Cost 1", hourly("special_pay"), _GREEN8, None),
+        (23, "Other Worker Specific Cost 2", 0, _GREEN8, None),
+    ]
+    for r, label, value, fill, note in lines:
+        put(f"B{r}", label)
+        put(f"C{r}", value, fill=fill)
+        if note:
+            put(f"D{r}", note, italic=True, border=False)
 
-    # Reference rate constants carried from the source workbook (rows 70-74).
-    grid.extend([[]] * 40)  # rows 30-69 (blank)
-    grid.append(line((11, "Employee Contribution"), (12, "0.12")))                     # 70
-    grid.append(line((11, "Employer Contribution"), (12, "0.0833")))                   # 71
-    grid.append(line((12, "0.0367")))                                                  # 72
-    grid.append(line((12, "0.005")))                                                   # 73
-    grid.append(line((12, "0.005")))                                                   # 74
+    put("B24", "CTC")
+    put("C24", hourly("grand_total"), fill=_GRAY, bold=True)
+    put("B25", "Customer Charge Rate (bid rate)")
+    put("C25", round(b.billing_rate_per_hour, 2), fill=_GREEN6)
+    put("B26", "Mark-up")
+    put("C26", round(b.markup_pct / 100, 4), fill=_GRAY, bold=True, numfmt="0%")
 
-    buf = io.StringIO()
-    csv.writer(buf).writerows(grid)
-    # Prepend a UTF-8 BOM so Excel renders the currency symbol correctly.
-    return "\ufeff" + buf.getvalue()
+    # Reference rate constants, unstyled, as in the source workbook (K67:L71).
+    plain = Font(name=_FONT, size=10)
+    for coord, value in (
+        ("K67", "Employee Contribution"), ("L67", 0.12),
+        ("K68", "Employer Contribution"), ("L68", 0.0833),
+        ("L69", 0.0367), ("L70", 0.005), ("L71", 0.005),
+    ):
+        ws[coord] = value
+        ws[coord].font = plain
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
 
 
 def _safe(text: str) -> str:

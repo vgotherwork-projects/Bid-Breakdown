@@ -1,5 +1,5 @@
 const els = {};
-["name", "ctc", "currency", "employment_type", "date_of_joining", "annual_hours", "markup_pct", "errorMsg", "metaNote", "totalBadge", "breakdownBody", "billingRate", "dojField", "resetBtn", "exportCsvBtn", "exportPdfBtn", "clearBtn", "submitBtn"].forEach(
+["name", "ctc", "currency", "employment_type", "date_of_joining", "annual_hours", "markup_pct", "errorMsg", "metaNote", "totalBadge", "breakdownBody", "billingRate", "dojField", "resetBtn", "exportXlsxBtn", "exportPdfBtn", "clearBtn", "submitBtn"].forEach(
     (id) => (els[id] = document.getElementById(id))
 );
 
@@ -83,13 +83,13 @@ async function calculate() {
 }
 
 function setExportEnabled(enabled) {
-    els.exportCsvBtn.disabled = !enabled;
+    els.exportXlsxBtn.disabled = !enabled;
     els.exportPdfBtn.disabled = !enabled;
 }
 
 async function exportBreakdown(format) {
     if (!lastValidPayload) return;
-    const btn = format === "csv" ? els.exportCsvBtn : els.exportPdfBtn;
+    const btn = format === "xlsx" ? els.exportXlsxBtn : els.exportPdfBtn;
     const original = btn.textContent;
     btn.disabled = true;
     btn.textContent = "...";
@@ -187,7 +187,7 @@ els.employment_type.addEventListener("change", () => {
 ["name", "ctc", "currency", "date_of_joining", "annual_hours", "markup_pct"].forEach((id) =>
     els[id].addEventListener("input", scheduleCalc)
 );
-els.exportCsvBtn.addEventListener("click", () => exportBreakdown("csv"));
+els.exportXlsxBtn.addEventListener("click", () => exportBreakdown("xlsx"));
 els.exportPdfBtn.addEventListener("click", () => exportBreakdown("pdf"));
 els.submitBtn.addEventListener("click", calculate);
 els.clearBtn.addEventListener("click", clearInputs);

@@ -210,27 +210,27 @@ def test_endpoint_calculates():
     assert grand["annual"] == round(1_200_000 + pto + gratuity, 2)
 
 
-def test_export_csv():
+def test_export_xlsx():
     res = client.post(
-        "/bids/export/csv",
+        "/bids/export/xlsx",
         json={"name": "Asha Rao", "ctc": 1200000, "employment_type": "new_hire"},
     )
     assert res.status_code == 200
-    assert res.headers["content-type"].startswith("text/csv")
-    assert "Asha Rao Bid Breakdown" in res.headers["content-disposition"]
-    body = res.text
-    # Worker-specific-costs template layout.
-    assert "Worker Name:,Asha Rao" in body
-    assert "Worker Specific Costs*" in body
-    assert "Worker Payroll (Basic)" in body
-    assert "Customer Charge Rate (bid rate)" in body
-    assert "Mark-up" in body
+    assert "spreadsheetml" in res.headers["content-type"]
+    disposition = res.headers["content-disposition"]
+    assert "Asha Rao_Bid Breakdown_" in disposition
+    assert disposition.rstrip().endswith('.xlsx"')
+    assert res.content[:2] == b"PK"  # .xlsx is a zip archive
 
 
-def test_export_csv_matches_template_mapping():
+def test_export_xlsx_matches_template():
+    import io
+
+    from openpyxl import load_workbook
+
     # CTC = 800,000 reproduces the reference workbook's hourly figures.
     res = client.post(
-        "/bids/export/csv",
+        "/bids/export/xlsx",
         json={
             "name": "Ranjetha Priya Arumugam",
             "ctc": 800000,
@@ -239,13 +239,24 @@ def test_export_csv_matches_template_mapping():
         },
     )
     assert res.status_code == 200
-    body = res.text
-    # Hourly values are annual / 1880, rounded to 2 dp.
-    assert ",Worker Payroll (Basic),115.09" in body  # 18030*12/1880
-    assert ",House Rent Allowance (HRA),57.54" in body
-    assert ",Transport Allowance,10.21" in body  # conveyance 1600/mo
-    assert ",Health Insurance & Life Insurance,7.98" in body  # medical 1250/mo
-    assert ",Mark-up,0.25" in body
+    ws = load_workbook(io.BytesIO(res.content))["Bid Breakdown"]
+
+    assert ws["B2"].value == "New Placement"
+    assert ws["B4"].value == "Supplier Name"
+    assert ws["C4"].value == "STG Infotech (India) LLP"
+    assert ws["C5"].value == "Ranjetha Priya Arumugam"
+    assert ws["C6"].value == 1880
+    assert ws["C7"].value == "Hourly (\u20b9)"
+    assert ws["B8"].value == "Worker Payroll (Basic)"
+    assert ws["C8"].value == 115.09  # 18030*12/1880
+    assert ws["C9"].value == 57.54  # HRA
+    assert ws["C14"].value == 7.98  # Health (medical 1250/mo)
+    assert ws["C18"].value == 10.21  # Transport (conveyance 1600/mo)
+    assert ws["C24"].value == 448.22  # CTC (grand total)
+    assert ws["C26"].value == 0.25 and ws["C26"].number_format == "0%"  # Mark-up
+    assert ws["D10"].value == "Onetime"  # gratuity note
+    assert ws["B8"].font.name == "Aptos"
+    assert ws["K67"].value == "Employee Contribution" and ws["L67"].value == 0.12
 
 
 def test_export_pdf():
@@ -255,7 +266,7 @@ def test_export_pdf():
     )
     assert res.status_code == 200
     assert res.headers["content-type"] == "application/pdf"
-    assert "Asha Rao Bid Breakdown" in res.headers["content-disposition"]
+    assert "Asha Rao_Bid Breakdown_" in res.headers["content-disposition"]
     assert res.content[:5] == b"%PDF-"
 
 
