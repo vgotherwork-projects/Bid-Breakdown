@@ -1,4 +1,5 @@
 import re
+from datetime import date
 
 from fastapi import APIRouter, Response
 
@@ -10,8 +11,10 @@ router = APIRouter(prefix="/bids", tags=["bids"])
 
 
 def _filename(name: str, ext: str) -> str:
-    slug = re.sub(r"[^A-Za-z0-9_-]+", "-", name).strip("-").lower() or "bid"
-    return f"{slug}-breakdown.{ext}"
+    # Mirror the workbook convention: "<Name> Bid Breakdown <Mon D, YYYY>.<ext>".
+    clean = re.sub(r'[\\/:*?"<>|]+', " ", name).strip()
+    clean = re.sub(r"\s+", " ", clean) or "Employee"
+    return f"{clean} Bid Breakdown {date.today():%b %d, %Y}.{ext}"
 
 
 @router.post("/calculate", response_model=EmployeeBidBreakdown)

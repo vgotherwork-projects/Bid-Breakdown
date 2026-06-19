@@ -217,11 +217,35 @@ def test_export_csv():
     )
     assert res.status_code == 200
     assert res.headers["content-type"].startswith("text/csv")
-    assert "asha-rao-breakdown.csv" in res.headers["content-disposition"]
+    assert "Asha Rao Bid Breakdown" in res.headers["content-disposition"]
     body = res.text
-    assert "Component,Monthly,Annual,Per hour" in body
-    assert "Grand Total" in body
-    assert "Billing rate per hour" in body
+    # Worker-specific-costs template layout.
+    assert "Worker Name:,Asha Rao" in body
+    assert "Worker Specific Costs*" in body
+    assert "Worker Payroll (Basic)" in body
+    assert "Customer Charge Rate (bid rate)" in body
+    assert "Mark-up" in body
+
+
+def test_export_csv_matches_template_mapping():
+    # CTC = 800,000 reproduces the reference workbook's hourly figures.
+    res = client.post(
+        "/bids/export/csv",
+        json={
+            "name": "Ranjetha Priya Arumugam",
+            "ctc": 800000,
+            "employment_type": "new_hire",
+            "as_of_date": "2024-01-01",
+        },
+    )
+    assert res.status_code == 200
+    body = res.text
+    # Hourly values are annual / 1880, rounded to 2 dp.
+    assert ",Worker Payroll (Basic),115.09" in body  # 18030*12/1880
+    assert ",House Rent Allowance (HRA),57.54" in body
+    assert ",Transport Allowance,10.21" in body  # conveyance 1600/mo
+    assert ",Health Insurance & Life Insurance,7.98" in body  # medical 1250/mo
+    assert ",Mark-up,0.25" in body
 
 
 def test_export_pdf():
@@ -231,7 +255,7 @@ def test_export_pdf():
     )
     assert res.status_code == 200
     assert res.headers["content-type"] == "application/pdf"
-    assert "asha-rao-breakdown.pdf" in res.headers["content-disposition"]
+    assert "Asha Rao Bid Breakdown" in res.headers["content-disposition"]
     assert res.content[:5] == b"%PDF-"
 
 

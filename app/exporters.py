@@ -7,12 +7,17 @@ from pathlib import Path
 from fpdf import FPDF
 from PIL import Image, ImageChops
 
-from .bid_schemas import EmployeeBidBreakdown
+from .bid_schemas import EmployeeBidBreakdown, EmploymentType
 
 LOGO_PATH = Path(__file__).resolve().parent / "static" / "logo.png"
 
 # Pixels whose strongest channel is below this are treated as background.
 _DARK_THRESHOLD = 50
+
+# Letterhead / supplier shown on the worker-specific-costs CSV template.
+SUPPLIER_NAME = "STG Infotech (India) LLP"
+
+_CURRENCY_SYMBOLS = {"INR": "\u20b9", "USD": "$", "EUR": "\u20ac", "GBP": "\u00a3"}
 
 
 @lru_cache(maxsize=1)
@@ -39,38 +44,86 @@ def _money(value: float, currency: str) -> str:
     return f"{currency} {value:,.2f}"
 
 
-def _meta_rows(b: EmployeeBidBreakdown) -> list[tuple[str, str]]:
-    return [
-        ("Employee", b.name),
-        ("Currency", b.currency),
-        ("Annual CTC", f"{b.ctc:,.2f}"),
-        ("Employment type", b.employment_type.value),
-        ("Date of joining", b.effective_date_of_joining.isoformat()),
-        ("Tenure (years)", str(b.tenure_years)),
-        ("Gratuity years (rounded)", str(b.gratuity_years)),
-        ("PTO days", str(b.pto_days)),
-        ("Annual working hours", str(b.annual_hours)),
-        ("Markup %", str(b.markup_pct)),
-    ]
+def _symbol(currency: str) -> str:
+    return _CURRENCY_SYMBOLS.get(currency.upper(), currency)
+
+
+def _country(currency: str) -> str:
+    return "India" if currency.upper() == "INR" else currency
+
+
+def _num(value: float) -> str:
+    """Match the template: a bare 0 for empty lines, 2 decimals otherwise."""
+    return "0" if round(value, 2) == 0 else f"{value:.2f}"
 
 
 def breakdown_to_csv(b: EmployeeBidBreakdown) -> str:
+    """Render the breakdown in the STG 'Worker Specific Costs' hourly template.
+
+    The reference workbook places the label in column B, the hourly (currency)
+    value in column C, a one-off note in column D, and a flag in column M, with
+    a fixed list of allowance lines. Our calculated components map onto that list;
+    anything we do not model is emitted as 0 so the file lines up with the sheet.
+    """
+    rk = {row.key: row for row in b.rows}
+
+    def hourly(key: str) -> float:
+        row = rk.get(key)
+        return row.hourly if row else 0.0
+
+    placement = (
+        "New Placement"
+        if b.employment_type == EmploymentType.new_hire
+        else "Existing Placement"
+    )
+
+    def line(*cells: tuple[int, str]) -> list[str]:
+        """Build a 13-wide (A..M) row; cells are (1-based column, value)."""
+        out = [""] * 13
+        for col, val in cells:
+            out[col - 1] = val
+        return out
+
+    grid: list[list[str]] = []
+    grid.extend([[]] * 4)  # rows 1-4 (blank)
+    grid.append(line((3, placement)))                                                  # 5
+    grid.append(line((3, _country(b.currency))))                                       # 6
+    grid.append(line((2, "Supplier Name:"), (3, SUPPLIER_NAME)))                       # 7
+    grid.append(line((2, "Worker Name:"), (3, b.name)))                               # 8
+    grid.append(line((2, "Max Annual Hours"), (3, f"{b.annual_hours:g}")))            # 9
+    grid.append(line((2, "Worker Specific Costs*"), (3, f"Hourly ({_symbol(b.currency)})"), (13, "Yes")))  # 10
+    grid.append(line((2, "Worker Payroll (Basic)"), (3, _num(hourly("basic"))), (13, "No")))               # 11
+    grid.append(line((2, "House Rent Allowance (HRA)"), (3, _num(hourly("hra")))))    # 12
+    grid.append(line((2, "Gratuity"), (3, _num(hourly("gratuity"))), (4, "Onetime")))  # 13
+    grid.append(line((2, "Provident Fund (PF) - Employers Cont."), (3, _num(hourly("employer_pf")))))      # 14
+    grid.append(line((2, "Bonus"), (3, "0")))                                          # 15
+    grid.append(line((2, "Paid Time Off"), (3, _num(hourly("pto"))), (4, "Onetime")))  # 16
+    grid.append(line((2, "Health Insurance & Life Insurance"), (3, _num(hourly("medical")))))              # 17
+    grid.append(line((2, "Driver Allowance"), (3, "0")))                               # 18
+    grid.append(line((2, "Stationary Allowance"), (3, "0")))                           # 19
+    grid.append(line((2, "Meal Allowance / Coupons"), (3, "0")))                       # 20
+    grid.append(line((2, "Transport Allowance"), (3, _num(hourly("conveyance")))))     # 21
+    grid.append(line((2, "Internet Allowance"), (3, "0")))                             # 22
+    grid.append(line((2, "Phone Allowance"), (3, "0")))                                # 23
+    grid.append(line((2, "Vehicle / Fuel Allowance"), (3, "0")))                       # 24
+    grid.append(line((2, "Other Worker Specific Cost 1"), (3, _num(hourly("special_pay")))))               # 25
+    grid.append(line((2, "Other Worker Specific Cost 2"), (3, "0")))                   # 26
+    grid.append(line((2, "CTC"), (3, _num(hourly("grand_total")))))                    # 27
+    grid.append(line((2, "Customer Charge Rate (bid rate)"), (3, _num(b.billing_rate_per_hour))))          # 28
+    grid.append(line((2, "Mark-up"), (3, f"{b.markup_pct / 100:.2f}")))                # 29
+
+    # Reference rate constants carried from the source workbook (rows 70-74).
+    grid.extend([[]] * 40)  # rows 30-69 (blank)
+    grid.append(line((11, "Employee Contribution"), (13, "0.12")))                     # 70
+    grid.append(line((11, "Employer Contribution"), (13, "0.0833")))                   # 71
+    grid.append(line((13, "0.0367")))                                                  # 72
+    grid.append(line((13, "0.005")))                                                   # 73
+    grid.append(line((13, "0.005")))                                                   # 74
+
     buf = io.StringIO()
-    writer = csv.writer(buf)
-
-    for key, value in _meta_rows(b):
-        writer.writerow([key, value])
-    writer.writerow([])
-
-    writer.writerow(["Component", "Monthly", "Annual", "Per hour"])
-    for row in b.rows:
-        writer.writerow([row.label, f"{row.monthly:.2f}", f"{row.annual:.2f}", f"{row.hourly:.2f}"])
-    writer.writerow([])
-
-    writer.writerow(["Grand total per hour", f"{b.grand_total_hourly:.2f}"])
-    writer.writerow([f"Billing rate per hour (+{b.markup_pct}% markup)", f"{b.billing_rate_per_hour:.2f}"])
-
-    return buf.getvalue()
+    csv.writer(buf).writerows(grid)
+    # Prepend a UTF-8 BOM so Excel renders the currency symbol correctly.
+    return "\ufeff" + buf.getvalue()
 
 
 def _safe(text: str) -> str:
