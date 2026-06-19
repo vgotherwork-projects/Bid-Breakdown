@@ -83,8 +83,8 @@ async function calculate() {
 }
 
 function setExportEnabled(enabled) {
-    els.exportXlsxBtn.disabled = !enabled;
-    els.exportPdfBtn.disabled = !enabled;
+    if (els.exportXlsxBtn) els.exportXlsxBtn.disabled = !enabled;
+    if (els.exportPdfBtn) els.exportPdfBtn.disabled = !enabled;
 }
 
 async function exportBreakdown(format) {
