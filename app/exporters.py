@@ -61,9 +61,9 @@ def breakdown_to_csv(b: EmployeeBidBreakdown) -> str:
     """Render the breakdown in the STG 'Worker Specific Costs' hourly template.
 
     The reference workbook places the label in column B, the hourly (currency)
-    value in column C, a one-off note in column D, and a flag in column M, with
-    a fixed list of allowance lines. Our calculated components map onto that list;
-    anything we do not model is emitted as 0 so the file lines up with the sheet.
+    value in column C, and a one-off note in column D, with a fixed list of
+    allowance lines. Our calculated components map onto that list; anything we do
+    not model is emitted as 0 so the file lines up with the sheet.
     """
     rk = {row.key: row for row in b.rows}
 
@@ -78,8 +78,9 @@ def breakdown_to_csv(b: EmployeeBidBreakdown) -> str:
     )
 
     def line(*cells: tuple[int, str]) -> list[str]:
-        """Build a 13-wide (A..M) row; cells are (1-based column, value)."""
-        out = [""] * 13
+        """Build a row from (1-based column, value) pairs, trimmed to the last one."""
+        width = max((col for col, _ in cells), default=0)
+        out = [""] * width
         for col, val in cells:
             out[col - 1] = val
         return out
@@ -91,8 +92,8 @@ def breakdown_to_csv(b: EmployeeBidBreakdown) -> str:
     grid.append(line((2, "Supplier Name:"), (3, SUPPLIER_NAME)))                       # 7
     grid.append(line((2, "Worker Name:"), (3, b.name)))                               # 8
     grid.append(line((2, "Max Annual Hours"), (3, f"{b.annual_hours:g}")))            # 9
-    grid.append(line((2, "Worker Specific Costs*"), (3, f"Hourly ({_symbol(b.currency)})"), (13, "Yes")))  # 10
-    grid.append(line((2, "Worker Payroll (Basic)"), (3, _num(hourly("basic"))), (13, "No")))               # 11
+    grid.append(line((2, "Worker Specific Costs*"), (3, f"Hourly ({_symbol(b.currency)})")))  # 10
+    grid.append(line((2, "Worker Payroll (Basic)"), (3, _num(hourly("basic")))))       # 11
     grid.append(line((2, "House Rent Allowance (HRA)"), (3, _num(hourly("hra")))))    # 12
     grid.append(line((2, "Gratuity"), (3, _num(hourly("gratuity"))), (4, "Onetime")))  # 13
     grid.append(line((2, "Provident Fund (PF) - Employers Cont."), (3, _num(hourly("employer_pf")))))      # 14
@@ -114,11 +115,11 @@ def breakdown_to_csv(b: EmployeeBidBreakdown) -> str:
 
     # Reference rate constants carried from the source workbook (rows 70-74).
     grid.extend([[]] * 40)  # rows 30-69 (blank)
-    grid.append(line((11, "Employee Contribution"), (13, "0.12")))                     # 70
-    grid.append(line((11, "Employer Contribution"), (13, "0.0833")))                   # 71
-    grid.append(line((13, "0.0367")))                                                  # 72
-    grid.append(line((13, "0.005")))                                                   # 73
-    grid.append(line((13, "0.005")))                                                   # 74
+    grid.append(line((11, "Employee Contribution"), (12, "0.12")))                     # 70
+    grid.append(line((11, "Employer Contribution"), (12, "0.0833")))                   # 71
+    grid.append(line((12, "0.0367")))                                                  # 72
+    grid.append(line((12, "0.005")))                                                   # 73
+    grid.append(line((12, "0.005")))                                                   # 74
 
     buf = io.StringIO()
     csv.writer(buf).writerows(grid)
