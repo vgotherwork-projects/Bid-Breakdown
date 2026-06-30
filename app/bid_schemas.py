@@ -70,3 +70,21 @@ class EmployeeBidBreakdown(BaseModel):
     billing_rate_per_hour: float
     basic_monthly: float
     rows: list[MoneyRow]
+
+
+class BatchRowResult(BaseModel):
+    sno: int | str | None = None
+    breakdown: EmployeeBidBreakdown
+
+
+class BatchError(BaseModel):
+    row: int
+    sno: int | str | None = None
+    name: str | None = None
+    message: str
+
+
+class BatchResult(BaseModel):
+    count: int
+    results: list[BatchRowResult]
+    errors: list[BatchError]

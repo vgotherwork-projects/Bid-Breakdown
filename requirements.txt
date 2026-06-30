@@ -5,6 +5,7 @@ pydantic-settings==2.7.1
 fpdf2==2.8.7
 pillow==12.2.0
 openpyxl==3.1.5
+python-multipart==0.0.20
 
 # Dev/test
 pytest==8.3.4

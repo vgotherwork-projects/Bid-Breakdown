@@ -1,9 +1,10 @@
 const els = {};
-["name", "ctc", "currency", "employment_type", "date_of_joining", "annual_hours", "markup_pct", "errorMsg", "metaNote", "totalBadge", "breakdownBody", "billingRate", "dojField", "resetBtn", "exportXlsxBtn", "exportPdfBtn", "clearBtn", "submitBtn"].forEach(
+["name", "ctc", "currency", "employment_type", "date_of_joining", "annual_hours", "markup_pct", "errorMsg", "metaNote", "totalBadge", "breakdownBody", "billingRate", "dojField", "resetBtn", "exportXlsxBtn", "exportPdfBtn", "clearBtn", "submitBtn", "batchFile", "batchProcessBtn", "batchExportBtn", "batchError", "batchWarn", "batchResult", "batchHead", "batchBody", "batchCount"].forEach(
     (id) => (els[id] = document.getElementById(id))
 );
 
 let lastValidPayload = null;
+let lastBatchFile = null;
 
 const DEFAULTS = {
     name: "Employee",
@@ -217,6 +218,136 @@ els.resetBtn.addEventListener("click", () => {
     toggleDoj();
     scheduleCalc();
 });
+
+// ---------- Batch upload ----------
+const BATCH_COLS = [
+    { label: "S. No.", get: (it) => (it.sno == null ? "" : it.sno) },
+    { label: "Name", get: (it) => it.breakdown.name },
+    { label: "Date of Joining", get: (it) => it.breakdown.effective_date_of_joining },
+    { label: "Annual CTC", money: true, get: (it) => it.breakdown.ctc },
+    { label: "Basic /hr", money: true, get: (it) => hourlyOf(it.breakdown, "basic") },
+    { label: "HRA /hr", money: true, get: (it) => hourlyOf(it.breakdown, "hra") },
+    { label: "Gratuity /hr", money: true, get: (it) => hourlyOf(it.breakdown, "gratuity") },
+    { label: "PF /hr", money: true, get: (it) => hourlyOf(it.breakdown, "employer_pf") },
+    { label: "PTO /hr", money: true, get: (it) => hourlyOf(it.breakdown, "pto") },
+    { label: "Health /hr", money: true, get: (it) => hourlyOf(it.breakdown, "medical") },
+    { label: "Transport /hr", money: true, get: (it) => hourlyOf(it.breakdown, "conveyance") },
+    { label: "Other /hr", money: true, get: (it) => hourlyOf(it.breakdown, "special_pay") },
+    { label: "CTC /hr", money: true, get: (it) => it.breakdown.grand_total_hourly },
+    { label: "Bid Rate /hr", money: true, get: (it) => it.breakdown.billing_rate_per_hour },
+];
+
+function hourlyOf(b, key) {
+    const row = (b.rows || []).find((r) => r.key === key);
+    return row ? row.hourly : 0;
+}
+
+function setBatchError(msg) {
+    els.batchError.textContent = msg;
+    els.batchError.classList.toggle("hidden", !msg);
+}
+
+async function batchProcess() {
+    const file = els.batchFile.files[0];
+    if (!file) {
+        setBatchError("Choose a .xlsx or .csv file first.");
+        return;
+    }
+    setBatchError("");
+    els.batchProcessBtn.disabled = true;
+    const original = els.batchProcessBtn.textContent;
+    els.batchProcessBtn.textContent = "Processing...";
+    try {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch("/bids/batch/calculate", { method: "POST", body: form });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(formatApiError(body));
+        }
+        const data = await res.json();
+        lastBatchFile = file;
+        renderBatch(data);
+        els.batchExportBtn.disabled = data.count === 0;
+    } catch (err) {
+        setBatchError(err.message || "Could not process the file.");
+        els.batchExportBtn.disabled = true;
+    } finally {
+        els.batchProcessBtn.textContent = original;
+        els.batchProcessBtn.disabled = false;
+    }
+}
+
+function renderBatch(data) {
+    els.batchCount.textContent = `${data.count} processed`;
+    els.batchHead.innerHTML =
+        "<tr>" +
+        BATCH_COLS.map((c) => `<th class="${c.money ? "num" : ""}">${escapeHtml(c.label)}</th>`).join("") +
+        "</tr>";
+    els.batchBody.innerHTML = data.results
+        .map((it) => {
+            const cur = it.breakdown.currency;
+            return (
+                "<tr>" +
+                BATCH_COLS.map((c) => {
+                    const v = c.get(it);
+                    const text = c.money ? formatMoney(v, cur) : escapeHtml(String(v));
+                    return `<td class="${c.money ? "num" : ""}">${text}</td>`;
+                }).join("") +
+                "</tr>"
+            );
+        })
+        .join("");
+    els.batchResult.classList.toggle("hidden", data.results.length === 0);
+
+    if (data.errors && data.errors.length) {
+        const lines = data.errors
+            .map((e) => `Row ${e.row}${e.name ? ` (${e.name})` : ""}: ${e.message}`)
+            .join(" · ");
+        els.batchWarn.textContent = `Skipped ${data.errors.length} row(s): ${lines}`;
+        els.batchWarn.classList.remove("hidden");
+    } else {
+        els.batchWarn.classList.add("hidden");
+    }
+}
+
+async function batchExport() {
+    if (!lastBatchFile) return;
+    const original = els.batchExportBtn.textContent;
+    els.batchExportBtn.disabled = true;
+    els.batchExportBtn.textContent = "...";
+    try {
+        const form = new FormData();
+        form.append("file", lastBatchFile);
+        const res = await fetch("/bids/batch/export", { method: "POST", body: form });
+        if (!res.ok) throw new Error("Export failed");
+        const blob = await res.blob();
+        const disposition = res.headers.get("Content-Disposition") || "";
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        const filename = match ? match[1] : "batch-breakdown.xlsx";
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        setBatchError(err.message || "Export failed");
+    } finally {
+        els.batchExportBtn.textContent = original;
+        els.batchExportBtn.disabled = false;
+    }
+}
+
+if (els.batchProcessBtn) els.batchProcessBtn.addEventListener("click", batchProcess);
+if (els.batchExportBtn) els.batchExportBtn.addEventListener("click", batchExport);
+if (els.batchFile)
+    els.batchFile.addEventListener("change", () => {
+        els.batchExportBtn.disabled = true;
+        setBatchError("");
+    });
 
 toggleDoj();
 calculate();

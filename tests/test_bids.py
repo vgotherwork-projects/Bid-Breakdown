@@ -270,6 +270,66 @@ def test_export_pdf():
     assert res.content[:5] == b"%PDF-"
 
 
+_BATCH_CSV = (
+    "S. No.,Name,Date of Joining,CTC\n"
+    "1,Asha Rao,2019-01-01,800000\n"
+    "2,Ravi Kumar,2023-06-01,800000\n"
+    "3,No Ctc,2020-01-01,\n"      # invalid: missing CTC
+    "4,,2020-01-01,500000\n"      # invalid: missing name
+)
+
+
+def _hourly(breakdown, key):
+    return next(r["hourly"] for r in breakdown["rows"] if r["key"] == key)
+
+
+def test_batch_calculate_csv():
+    res = client.post(
+        "/bids/batch/calculate",
+        files={"file": ("batch.csv", _BATCH_CSV.encode(), "text/csv")},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["count"] == 2
+    assert len(body["errors"]) == 2  # missing CTC + missing name
+    first = body["results"][0]
+    assert first["sno"] == 1
+    assert first["breakdown"]["name"] == "Asha Rao"
+    assert first["breakdown"]["employment_type"] == "existing"
+    # Date-independent components for CTC = 800,000.
+    assert _hourly(first["breakdown"], "basic") == 115.09
+    assert _hourly(first["breakdown"], "hra") == 57.54
+    assert _hourly(first["breakdown"], "conveyance") == 10.21
+
+
+def test_batch_export_xlsx():
+    import io
+
+    from openpyxl import load_workbook
+
+    res = client.post(
+        "/bids/batch/export",
+        files={"file": ("batch.csv", _BATCH_CSV.encode(), "text/csv")},
+    )
+    assert res.status_code == 200
+    assert "spreadsheetml" in res.headers["content-type"]
+    assert "Batch_Bid Breakdown_" in res.headers["content-disposition"]
+
+    wb = load_workbook(io.BytesIO(res.content))
+    assert wb.sheetnames[0] == "Summary"
+    # Summary header + one detail sheet per valid worker.
+    assert len(wb.sheetnames) == 3
+    summary = wb["Summary"]
+    assert summary["A1"].value == "S. No."
+    assert summary["B1"].value == "Name"
+    assert summary["B2"].value == "Asha Rao"
+    assert summary["E2"].value == 115.09  # Basic /hr column
+    # Detail sheets use the existing-placement banner.
+    detail = wb[wb.sheetnames[1]]
+    assert detail["B2"].value == "Existing Placement"
+    assert detail["C8"].value == 115.09
+
+
 def test_endpoint_existing_requires_doj():
     res = client.post(
         "/bids/calculate",

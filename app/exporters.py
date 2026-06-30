@@ -1,11 +1,13 @@
 """Excel (.xlsx) and PDF renderers for an employee bid breakdown."""
 import io
+import re
 from functools import lru_cache
 from pathlib import Path
 
 from fpdf import FPDF
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 from PIL import Image, ImageChops
 
 from .bid_schemas import EmployeeBidBreakdown, EmploymentType
@@ -66,22 +68,20 @@ _THIN = Side(style="thin", color=_BLACK)
 _BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
 
 
-def breakdown_to_xlsx(b: EmployeeBidBreakdown) -> bytes:
-    """Render the breakdown as a styled .xlsx mirroring the STG workbook.
+def _hourly_of(b: EmployeeBidBreakdown, key: str):
+    for row in b.rows:
+        if row.key == key:
+            return round(row.hourly, 2)
+    return 0
+
+
+def _write_breakdown_sheet(ws, b: EmployeeBidBreakdown) -> None:
+    """Populate `ws` with the styled STG worker-specific-costs layout.
 
     Labels sit in column B, the hourly (currency) value in column C, and a
     one-off note in column D. Our calculated components map onto the template's
     fixed allowance list; anything we do not model is emitted as 0.
     """
-    rk = {row.key: row for row in b.rows}
-
-    def hourly(key: str):
-        row = rk.get(key)
-        return round(row.hourly, 2) if row else 0
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Bid Breakdown"
     ws.column_dimensions["B"].width = 31.0
     ws.column_dimensions["C"].width = 21.63
 
@@ -99,6 +99,9 @@ def breakdown_to_xlsx(b: EmployeeBidBreakdown) -> bytes:
         if numfmt:
             cell.number_format = numfmt
         return cell
+
+    def hourly(key: str):
+        return _hourly_of(b, key)
 
     placement = (
         "New Placement"
@@ -164,6 +167,98 @@ def breakdown_to_xlsx(b: EmployeeBidBreakdown) -> bytes:
     ):
         ws[coord] = value
         ws[coord].font = plain
+
+
+def breakdown_to_xlsx(b: EmployeeBidBreakdown) -> bytes:
+    """Render a single breakdown as a styled .xlsx mirroring the STG workbook."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Bid Breakdown"
+    _write_breakdown_sheet(ws, b)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+# Summary columns: (header, breakdown row-key or special token, number format).
+_SUMMARY_COLS = [
+    ("S. No.", "_sno", "0"),
+    ("Name", "_name", None),
+    ("Date of Joining", "_doj", None),
+    ("Annual CTC", "_ctc", "#,##0"),
+    ("Basic /hr", "basic", "0.00"),
+    ("HRA /hr", "hra", "0.00"),
+    ("Gratuity /hr", "gratuity", "0.00"),
+    ("PF /hr", "employer_pf", "0.00"),
+    ("PTO /hr", "pto", "0.00"),
+    ("Health Ins /hr", "medical", "0.00"),
+    ("Transport /hr", "conveyance", "0.00"),
+    ("Other /hr", "special_pay", "0.00"),
+    ("CTC /hr", "grand_total", "0.00"),
+    ("Bid Rate /hr", "_billing", "0.00"),
+]
+
+
+def _safe_sheet_title(base: str, used: set[str]) -> str:
+    title = re.sub(r"[:\\/?*\[\]]", " ", base).strip()[:31] or "Sheet"
+    candidate, n = title, 2
+    while candidate.lower() in used:
+        suffix = f" ({n})"
+        candidate = title[: 31 - len(suffix)] + suffix
+        n += 1
+    used.add(candidate.lower())
+    return candidate
+
+
+def batch_to_xlsx(items: list[tuple[object, EmployeeBidBreakdown]]) -> bytes:
+    """Build a workbook with a Summary sheet plus one detail sheet per worker.
+
+    `items` is a list of (serial number, breakdown) pairs.
+    """
+    wb = Workbook()
+    summary = wb.active
+    summary.title = "Summary"
+    summary.freeze_panes = "A2"
+
+    header_font = Font(name=_FONT, size=10, bold=True, color=_WHITE)
+    body_font = Font(name=_FONT, size=10)
+    header_fill = PatternFill(fill_type="solid", fgColor=_BLACK)
+
+    for col_idx, (header, _key, _fmt) in enumerate(_SUMMARY_COLS, start=1):
+        cell = summary.cell(row=1, column=col_idx, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = _BORDER
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    for r, (sno, b) in enumerate(items, start=2):
+        for col_idx, (_header, key, fmt) in enumerate(_SUMMARY_COLS, start=1):
+            if key == "_sno":
+                value = sno
+            elif key == "_name":
+                value = b.name
+            elif key == "_doj":
+                value = b.effective_date_of_joining.isoformat()
+            elif key == "_ctc":
+                value = round(b.ctc, 2)
+            elif key == "_billing":
+                value = round(b.billing_rate_per_hour, 2)
+            else:
+                value = _hourly_of(b, key)
+            cell = summary.cell(row=r, column=col_idx, value=value)
+            cell.font = body_font
+            cell.border = _BORDER
+            if fmt:
+                cell.number_format = fmt
+
+    widths = [7, 26, 16, 14] + [12] * (len(_SUMMARY_COLS) - 4)
+    for col_idx, width in enumerate(widths, start=1):
+        summary.column_dimensions[get_column_letter(col_idx)].width = width
+
+    used_titles: set[str] = {"summary"}
+    for sno, b in items:
+        title = _safe_sheet_title(f"{sno}. {b.name}" if sno not in (None, "") else b.name, used_titles)
+        _write_breakdown_sheet(wb.create_sheet(title=title), b)
 
     buf = io.BytesIO()
     wb.save(buf)

@@ -115,6 +115,14 @@ body {
     font-size: 0.74rem; font-weight: 700; color: var(--text-muted);
     text-transform: uppercase; letter-spacing: 0.04em;
 }
+.batch-card { grid-column: 1 / -1; }
+.batch-actions { align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.batch-actions input[type="file"] { flex: 1 1 240px; min-width: 0; }
+.batch-result { max-height: 62vh; overflow: auto; }
+.batch-table { min-width: 820px; font-size: 0.85rem; }
+.batch-table th, .batch-table td { white-space: nowrap; }
+.batch-table tbody tr:nth-child(even) { background: #f8fafc; }
+
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; }
 @media (max-width: 420px) { .grid-2 { grid-template-columns: 1fr; } }
 
