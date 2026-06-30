@@ -51,10 +51,9 @@ async def batch_calculate(file: UploadFile = File(...)) -> BatchResult:
 
 @router.post("/batch/export")
 async def batch_export(file: UploadFile = File(...)) -> Response:
-    """Return one workbook: a Summary sheet plus a styled sheet per worker."""
+    """Return one wide master sheet: a row per worker, components across columns."""
     data = await file.read()
     result = process_batch(file.filename or "", data)
-    items = [(row.sno, row.breakdown) for row in result.results]
-    content = batch_to_xlsx(items)
+    content = batch_to_xlsx(result.results)
     headers = {"Content-Disposition": f'attachment; filename="{_filename("Batch", "xlsx")}"'}
     return Response(content=content, media_type=XLSX_MEDIA_TYPE, headers=headers)

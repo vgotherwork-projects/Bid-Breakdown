@@ -220,21 +220,35 @@ els.resetBtn.addEventListener("click", () => {
 });
 
 // ---------- Batch upload ----------
+// Wide master-table layout (one row per worker). Identity/supplier columns come
+// from the uploaded file; cost components are the per-hour values we compute;
+// modelled-as-zero allowances show 0.
 const BATCH_COLS = [
-    { label: "S. No.", get: (it) => (it.sno == null ? "" : it.sno) },
-    { label: "Name", get: (it) => it.breakdown.name },
-    { label: "Date of Joining", get: (it) => it.breakdown.effective_date_of_joining },
-    { label: "Annual CTC", money: true, get: (it) => it.breakdown.ctc },
-    { label: "Basic /hr", money: true, get: (it) => hourlyOf(it.breakdown, "basic") },
-    { label: "HRA /hr", money: true, get: (it) => hourlyOf(it.breakdown, "hra") },
-    { label: "Gratuity /hr", money: true, get: (it) => hourlyOf(it.breakdown, "gratuity") },
-    { label: "PF /hr", money: true, get: (it) => hourlyOf(it.breakdown, "employer_pf") },
-    { label: "PTO /hr", money: true, get: (it) => hourlyOf(it.breakdown, "pto") },
-    { label: "Health /hr", money: true, get: (it) => hourlyOf(it.breakdown, "medical") },
-    { label: "Transport /hr", money: true, get: (it) => hourlyOf(it.breakdown, "conveyance") },
-    { label: "Other /hr", money: true, get: (it) => hourlyOf(it.breakdown, "special_pay") },
-    { label: "CTC /hr", money: true, get: (it) => it.breakdown.grand_total_hourly },
-    { label: "Bid Rate /hr", money: true, get: (it) => it.breakdown.billing_rate_per_hour },
+    { label: "SL No", num: true, get: (it) => (it.sno == null ? "" : it.sno) },
+    { label: "STGI-ID", get: (it) => it.stgi_id || "" },
+    { label: "Agency worker Name", get: (it) => it.breakdown.name },
+    { label: "Supplier", get: (it) => it.supplier || "" },
+    { label: "B2B Contractor ID", get: (it) => it.b2b_id || "" },
+    { label: "PO Number", get: (it) => it.po_number || "" },
+    { label: "Worker Payroll (Basic)", money: true, get: (it) => hourlyOf(it.breakdown, "basic") },
+    { label: "House Rent Allowance (HRA)", money: true, get: (it) => hourlyOf(it.breakdown, "hra") },
+    { label: "Gratuity", money: true, get: (it) => hourlyOf(it.breakdown, "gratuity") },
+    { label: "Provident Fund (PF) - Employers Cont.", money: true, get: (it) => hourlyOf(it.breakdown, "employer_pf") },
+    { label: "Bonus", money: true, get: () => 0 },
+    { label: "Paid Time Off", money: true, get: (it) => hourlyOf(it.breakdown, "pto") },
+    { label: "Health Insurance & Life Insurance", money: true, get: (it) => hourlyOf(it.breakdown, "medical") },
+    { label: "Driver Allowance", money: true, get: () => 0 },
+    { label: "Stationary Allowance", money: true, get: () => 0 },
+    { label: "Meal Allowance / Coupons", money: true, get: () => 0 },
+    { label: "Transport Allowance", money: true, get: (it) => hourlyOf(it.breakdown, "conveyance") },
+    { label: "Internet Allowance", money: true, get: () => 0 },
+    { label: "Phone Allowance", money: true, get: () => 0 },
+    { label: "Vehicle / Fuel Allowance", money: true, get: () => 0 },
+    { label: "Other Worker Specific Cost 1", money: true, get: (it) => hourlyOf(it.breakdown, "special_pay") },
+    { label: "Other Worker Specific Cost 2", money: true, get: () => 0 },
+    { label: "Supplier Contact Name", get: (it) => it.contact_name || "" },
+    { label: "Supplier Contact Email", get: (it) => it.contact_email || "" },
+    { label: "Supplier Contact Phone", get: (it) => it.contact_phone || "" },
 ];
 
 function hourlyOf(b, key) {
@@ -282,7 +296,7 @@ function renderBatch(data) {
     els.batchCount.textContent = `${data.count} processed`;
     els.batchHead.innerHTML =
         "<tr>" +
-        BATCH_COLS.map((c) => `<th class="${c.money ? "num" : ""}">${escapeHtml(c.label)}</th>`).join("") +
+        BATCH_COLS.map((c) => `<th class="${c.money || c.num ? "num" : ""}">${escapeHtml(c.label)}</th>`).join("") +
         "</tr>";
     els.batchBody.innerHTML = data.results
         .map((it) => {
@@ -292,7 +306,7 @@ function renderBatch(data) {
                 BATCH_COLS.map((c) => {
                     const v = c.get(it);
                     const text = c.money ? formatMoney(v, cur) : escapeHtml(String(v));
-                    return `<td class="${c.money ? "num" : ""}">${text}</td>`;
+                    return `<td class="${c.money || c.num ? "num" : ""}">${text}</td>`;
                 }).join("") +
                 "</tr>"
             );

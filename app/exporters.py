@@ -1,6 +1,5 @@
 """Excel (.xlsx) and PDF renderers for an employee bid breakdown."""
 import io
-import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -10,7 +9,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from PIL import Image, ImageChops
 
-from .bid_schemas import EmployeeBidBreakdown, EmploymentType
+from .bid_schemas import BatchRowResult, EmployeeBidBreakdown, EmploymentType
 
 LOGO_PATH = Path(__file__).resolve().parent / "static" / "logo.png"
 
@@ -180,85 +179,84 @@ def breakdown_to_xlsx(b: EmployeeBidBreakdown) -> bytes:
     return buf.getvalue()
 
 
-# Summary columns: (header, breakdown row-key or special token, number format).
-_SUMMARY_COLS = [
-    ("S. No.", "_sno", "0"),
-    ("Name", "_name", None),
-    ("Date of Joining", "_doj", None),
-    ("Annual CTC", "_ctc", "#,##0"),
-    ("Basic /hr", "basic", "0.00"),
-    ("HRA /hr", "hra", "0.00"),
-    ("Gratuity /hr", "gratuity", "0.00"),
-    ("PF /hr", "employer_pf", "0.00"),
-    ("PTO /hr", "pto", "0.00"),
-    ("Health Ins /hr", "medical", "0.00"),
-    ("Transport /hr", "conveyance", "0.00"),
-    ("Other /hr", "special_pay", "0.00"),
-    ("CTC /hr", "grand_total", "0.00"),
-    ("Bid Rate /hr", "_billing", "0.00"),
+# Wide master-table columns, in the exact order requested for the batch output.
+# Each entry: (header, kind, key, number-format, column-width).
+#   kind "id"    -> attribute carried through from the uploaded file (or blank)
+#   kind "name"  -> the worker name from the breakdown
+#   kind "money" -> the hourly value of a breakdown component (key = row key)
+#   kind "zero"  -> a component we do not model; always 0
+_BATCH_COLS = [
+    ("SL No", "id", "sno", "0", 7),
+    ("STGI-ID", "id", "stgi_id", None, 12),
+    ("Agency worker Name", "name", None, None, 24),
+    ("Supplier", "id", "supplier", None, 22),
+    ("B2B Contractor ID", "id", "b2b_id", None, 16),
+    ("PO Number", "id", "po_number", None, 14),
+    ("Worker Payroll (Basic)", "money", "basic", "0.00", 14),
+    ("House Rent Allowance (HRA)", "money", "hra", "0.00", 16),
+    ("Gratuity", "money", "gratuity", "0.00", 11),
+    ("Provident Fund (PF) - Employers Cont.", "money", "employer_pf", "0.00", 18),
+    ("Bonus", "zero", None, "0.00", 10),
+    ("Paid Time Off", "money", "pto", "0.00", 12),
+    ("Health Insurance & Life Insurance", "money", "medical", "0.00", 18),
+    ("Driver Allowance", "zero", None, "0.00", 13),
+    ("Stationary Allowance", "zero", None, "0.00", 14),
+    ("Meal Allowance / Coupons", "zero", None, "0.00", 16),
+    ("Transport Allowance", "money", "conveyance", "0.00", 14),
+    ("Internet Allowance", "zero", None, "0.00", 13),
+    ("Phone Allowance", "zero", None, "0.00", 13),
+    ("Vehicle / Fuel Allowance", "zero", None, "0.00", 14),
+    ("Other Worker Specific Cost 1", "money", "special_pay", "0.00", 16),
+    ("Other Worker Specific Cost 2", "zero", None, "0.00", 16),
+    ("Supplier Contact Name", "id", "contact_name", None, 20),
+    ("Supplier Contact Email", "id", "contact_email", None, 24),
+    ("Supplier Contact Phone", "id", "contact_phone", None, 18),
 ]
 
 
-def _safe_sheet_title(base: str, used: set[str]) -> str:
-    title = re.sub(r"[:\\/?*\[\]]", " ", base).strip()[:31] or "Sheet"
-    candidate, n = title, 2
-    while candidate.lower() in used:
-        suffix = f" ({n})"
-        candidate = title[: 31 - len(suffix)] + suffix
-        n += 1
-    used.add(candidate.lower())
-    return candidate
+def _batch_value(row: BatchRowResult, kind: str, key):
+    if kind == "name":
+        return row.breakdown.name
+    if kind == "id":
+        return getattr(row, key) or ""
+    if kind == "money":
+        return _hourly_of(row.breakdown, key)
+    return 0  # "zero": an allowance we do not model
 
 
-def batch_to_xlsx(items: list[tuple[object, EmployeeBidBreakdown]]) -> bytes:
-    """Build a workbook with a Summary sheet plus one detail sheet per worker.
-
-    `items` is a list of (serial number, breakdown) pairs.
-    """
+def batch_to_xlsx(rows: list[BatchRowResult]) -> bytes:
+    """Build one wide master sheet: a row per worker, components across columns."""
     wb = Workbook()
-    summary = wb.active
-    summary.title = "Summary"
-    summary.freeze_panes = "A2"
+    ws = wb.active
+    ws.title = "Bid Breakdown"
+    ws.freeze_panes = "C2"  # keep SL No / STGI-ID / Name visible while scrolling
 
     header_font = Font(name=_FONT, size=10, bold=True, color=_WHITE)
     body_font = Font(name=_FONT, size=10)
     header_fill = PatternFill(fill_type="solid", fgColor=_BLACK)
+    value_fill = PatternFill(fill_type="solid", fgColor=_GREEN8)
+    center_wrap = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-    for col_idx, (header, _key, _fmt) in enumerate(_SUMMARY_COLS, start=1):
-        cell = summary.cell(row=1, column=col_idx, value=header)
+    for col_idx, (header, *_rest) in enumerate(_BATCH_COLS, start=1):
+        cell = ws.cell(row=1, column=col_idx, value=header)
         cell.font = header_font
         cell.fill = header_fill
         cell.border = _BORDER
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.alignment = center_wrap
 
-    for r, (sno, b) in enumerate(items, start=2):
-        for col_idx, (_header, key, fmt) in enumerate(_SUMMARY_COLS, start=1):
-            if key == "_sno":
-                value = sno
-            elif key == "_name":
-                value = b.name
-            elif key == "_doj":
-                value = b.effective_date_of_joining.isoformat()
-            elif key == "_ctc":
-                value = round(b.ctc, 2)
-            elif key == "_billing":
-                value = round(b.billing_rate_per_hour, 2)
-            else:
-                value = _hourly_of(b, key)
-            cell = summary.cell(row=r, column=col_idx, value=value)
+    for r, row in enumerate(rows, start=2):
+        for col_idx, (_header, kind, key, fmt, _w) in enumerate(_BATCH_COLS, start=1):
+            cell = ws.cell(row=r, column=col_idx, value=_batch_value(row, kind, key))
             cell.font = body_font
             cell.border = _BORDER
             if fmt:
                 cell.number_format = fmt
+            if kind in ("money", "zero"):
+                cell.fill = value_fill
 
-    widths = [7, 26, 16, 14] + [12] * (len(_SUMMARY_COLS) - 4)
-    for col_idx, width in enumerate(widths, start=1):
-        summary.column_dimensions[get_column_letter(col_idx)].width = width
-
-    used_titles: set[str] = {"summary"}
-    for sno, b in items:
-        title = _safe_sheet_title(f"{sno}. {b.name}" if sno not in (None, "") else b.name, used_titles)
-        _write_breakdown_sheet(wb.create_sheet(title=title), b)
+    for col_idx, (_h, _k, _key, _fmt, width) in enumerate(_BATCH_COLS, start=1):
+        ws.column_dimensions[get_column_letter(col_idx)].width = width
+    ws.row_dimensions[1].height = 42
 
     buf = io.BytesIO()
     wb.save(buf)

@@ -74,6 +74,15 @@ class EmployeeBidBreakdown(BaseModel):
 
 class BatchRowResult(BaseModel):
     sno: int | str | None = None
+    # Identity / supplier columns carried through from the uploaded file; any that
+    # are absent stay blank. Cost components below are computed from the breakdown.
+    stgi_id: str = ""
+    supplier: str = ""
+    b2b_id: str = ""
+    po_number: str = ""
+    contact_name: str = ""
+    contact_email: str = ""
+    contact_phone: str = ""
     breakdown: EmployeeBidBreakdown
 
 

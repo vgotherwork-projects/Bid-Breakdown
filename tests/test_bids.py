@@ -270,12 +270,14 @@ def test_export_pdf():
     assert res.content[:5] == b"%PDF-"
 
 
+# Header order is intentionally interleaved to exercise name-based column mapping.
 _BATCH_CSV = (
-    "S. No.,Name,Date of Joining,CTC\n"
-    "1,Asha Rao,2019-01-01,800000\n"
-    "2,Ravi Kumar,2023-06-01,800000\n"
-    "3,No Ctc,2020-01-01,\n"      # invalid: missing CTC
-    "4,,2020-01-01,500000\n"      # invalid: missing name
+    "S. No.,STGI-ID,Agency worker Name,Supplier,B2B Contractor ID,PO Number,"
+    "Date of Joining,CTC,Supplier Contact Name,Supplier Contact Email,Supplier Contact Phone\n"
+    "1,STG001,Asha Rao,Acme Staffing,B2B-77,PO-100,2019-01-01,800000,Meera S,meera@acme.example,9999999999\n"
+    "2,STG002,Ravi Kumar,Acme Staffing,B2B-78,PO-101,2023-06-01,800000,Meera S,meera@acme.example,9999999999\n"
+    "3,STG003,No Ctc,Acme Staffing,B2B-79,PO-102,2020-01-01,,Meera S,meera@acme.example,9999999999\n"
+    "4,STG004,,Acme Staffing,B2B-80,PO-103,2020-01-01,500000,Meera S,meera@acme.example,9999999999\n"
 )
 
 
@@ -296,6 +298,14 @@ def test_batch_calculate_csv():
     assert first["sno"] == 1
     assert first["breakdown"]["name"] == "Asha Rao"
     assert first["breakdown"]["employment_type"] == "existing"
+    # Identity / supplier columns carried straight through from the file.
+    assert first["stgi_id"] == "STG001"
+    assert first["supplier"] == "Acme Staffing"
+    assert first["b2b_id"] == "B2B-77"
+    assert first["po_number"] == "PO-100"
+    assert first["contact_name"] == "Meera S"
+    assert first["contact_email"] == "meera@acme.example"
+    assert first["contact_phone"] == "9999999999"
     # Date-independent components for CTC = 800,000.
     assert _hourly(first["breakdown"], "basic") == 115.09
     assert _hourly(first["breakdown"], "hra") == 57.54
@@ -316,18 +326,35 @@ def test_batch_export_xlsx():
     assert "Batch_Bid Breakdown_" in res.headers["content-disposition"]
 
     wb = load_workbook(io.BytesIO(res.content))
-    assert wb.sheetnames[0] == "Summary"
-    # Summary header + one detail sheet per valid worker.
-    assert len(wb.sheetnames) == 3
-    summary = wb["Summary"]
-    assert summary["A1"].value == "S. No."
-    assert summary["B1"].value == "Name"
-    assert summary["B2"].value == "Asha Rao"
-    assert summary["E2"].value == 115.09  # Basic /hr column
-    # Detail sheets use the existing-placement banner.
-    detail = wb[wb.sheetnames[1]]
-    assert detail["B2"].value == "Existing Placement"
-    assert detail["C8"].value == 115.09
+    # Single wide master sheet (no per-worker detail sheets).
+    assert wb.sheetnames == ["Bid Breakdown"]
+    ws = wb["Bid Breakdown"]
+
+    # Header row matches the requested wide layout.
+    assert ws["A1"].value == "SL No"
+    assert ws["C1"].value == "Agency worker Name"
+    assert ws["G1"].value == "Worker Payroll (Basic)"
+    assert ws["Y1"].value == "Supplier Contact Phone"
+    assert ws["A1"].font.name == "Aptos"
+
+    # First worker row: identity carried through, components computed (hourly).
+    assert ws["A2"].value == 1
+    assert ws["B2"].value == "STG001"
+    assert ws["C2"].value == "Asha Rao"
+    assert ws["D2"].value == "Acme Staffing"
+    assert ws["E2"].value == "B2B-77"
+    assert ws["F2"].value == "PO-100"
+    assert ws["G2"].value == 115.09 and ws["G2"].number_format == "0.00"  # Basic
+    assert ws["H2"].value == 57.54   # HRA
+    assert ws["Q2"].value == 10.21   # Transport (conveyance)
+    assert ws["K2"].value == 0       # Bonus (not modelled)
+    assert ws["W2"].value == "Meera S"
+    assert ws["X2"].value == "meera@acme.example"
+    assert ws["Y2"].value == "9999999999"
+
+    # Second valid worker on the next row.
+    assert ws["A3"].value == 2
+    assert ws["C3"].value == "Ravi Kumar"
 
 
 def test_endpoint_existing_requires_doj():
