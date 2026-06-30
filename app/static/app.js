@@ -160,6 +160,13 @@ function render(b) {
     els.metaNote.innerHTML = `${tenure}Basic: <strong>${money(b.basic_monthly)}/mo</strong> &middot; Annual hours: <strong>${b.annual_hours}</strong>`;
 }
 
+function formatNum2(value) {
+    if (value === "" || value == null) return "";
+    return Number(value).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+}
 function formatMoney(value, currency) {
     try {
         return new Intl.NumberFormat(undefined, {
@@ -230,7 +237,7 @@ const BATCH_COLS = [
     { label: "Supplier", get: (it) => it.supplier || "" },
     { label: "B2B Contractor ID", get: (it) => it.b2b_id || "" },
     { label: "PO Number", get: (it) => it.po_number || "" },
-    { label: "PO Rate (INR)", num: true, get: (it) => (it.po_rate == null ? "" : it.po_rate) },
+    { label: "PO Rate (INR)", num2: true, get: (it) => (it.po_rate == null ? "" : it.po_rate) },
     { label: "Worker Payroll (Basic)", money: true, get: (it) => hourlyOf(it.breakdown, "basic") },
     { label: "House Rent Allowance (HRA)", money: true, get: (it) => hourlyOf(it.breakdown, "hra") },
     { label: "Gratuity", money: true, get: (it) => hourlyOf(it.breakdown, "gratuity") },
@@ -307,9 +314,10 @@ async function batchProcess() {
 
 function renderBatch(data) {
     els.batchCount.textContent = `${data.count} processed`;
+    const isNum = (c) => c.money || c.num || c.num2;
     els.batchHead.innerHTML =
         "<tr>" +
-        BATCH_COLS.map((c) => `<th class="${c.money || c.num ? "num" : ""}">${escapeHtml(c.label)}</th>`).join("") +
+        BATCH_COLS.map((c) => `<th class="${isNum(c) ? "num" : ""}">${escapeHtml(c.label)}</th>`).join("") +
         "</tr>";
     els.batchBody.innerHTML = data.results
         .map((it) => {
@@ -318,8 +326,11 @@ function renderBatch(data) {
                 "<tr>" +
                 BATCH_COLS.map((c) => {
                     const v = c.get(it);
-                    const text = c.money ? formatMoney(v, cur) : escapeHtml(String(v));
-                    return `<td class="${c.money || c.num ? "num" : ""}">${text}</td>`;
+                    let text;
+                    if (c.money) text = formatMoney(v, cur);
+                    else if (c.num2) text = formatNum2(v);
+                    else text = escapeHtml(String(v));
+                    return `<td class="${isNum(c) ? "num" : ""}">${text}</td>`;
                 }).join("") +
                 "</tr>"
             );
