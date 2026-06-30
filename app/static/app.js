@@ -262,13 +262,25 @@ function setBatchError(msg) {
     els.batchError.classList.toggle("hidden", !msg);
 }
 
+function clearBatch() {
+    lastBatchFile = null;
+    els.batchHead.innerHTML = "";
+    els.batchBody.innerHTML = "";
+    els.batchResult.classList.add("hidden");
+    els.batchCount.textContent = "—";
+    els.batchWarn.textContent = "";
+    els.batchWarn.classList.add("hidden");
+    setBatchError("");
+    els.batchExportBtn.disabled = true;
+}
+
 async function batchProcess() {
     const file = els.batchFile.files[0];
     if (!file) {
         setBatchError("Choose a .xlsx or .csv file first.");
         return;
     }
-    setBatchError("");
+    clearBatch();
     els.batchProcessBtn.disabled = true;
     const original = els.batchProcessBtn.textContent;
     els.batchProcessBtn.textContent = "Processing...";
@@ -358,11 +370,7 @@ async function batchExport() {
 
 if (els.batchProcessBtn) els.batchProcessBtn.addEventListener("click", batchProcess);
 if (els.batchExportBtn) els.batchExportBtn.addEventListener("click", batchExport);
-if (els.batchFile)
-    els.batchFile.addEventListener("change", () => {
-        els.batchExportBtn.disabled = true;
-        setBatchError("");
-    });
+if (els.batchFile) els.batchFile.addEventListener("change", clearBatch);
 
 toggleDoj();
 calculate();
