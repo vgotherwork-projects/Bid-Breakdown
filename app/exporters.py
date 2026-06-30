@@ -181,7 +181,8 @@ def breakdown_to_xlsx(b: EmployeeBidBreakdown) -> bytes:
 
 # Wide master-table columns, in the exact order requested for the batch output.
 # Each entry: (header, kind, key, number-format, column-width).
-#   kind "id"    -> attribute carried through from the uploaded file (or blank)
+#   kind "id"    -> text attribute carried through from the uploaded file (or blank)
+#   kind "num"   -> numeric attribute carried through from the uploaded file (or blank)
 #   kind "name"  -> the worker name from the breakdown
 #   kind "money" -> the hourly value of a breakdown component (key = row key)
 #   kind "zero"  -> a component we do not model; always 0
@@ -192,6 +193,7 @@ _BATCH_COLS = [
     ("Supplier", "id", "supplier", None, 22),
     ("B2B Contractor ID", "id", "b2b_id", None, 16),
     ("PO Number", "id", "po_number", None, 14),
+    ("PO Rate (INR)", "num", "po_rate", "#,##0.00", 13),
     ("Worker Payroll (Basic)", "money", "basic", "0.00", 14),
     ("House Rent Allowance (HRA)", "money", "hra", "0.00", 16),
     ("Gratuity", "money", "gratuity", "0.00", 11),
@@ -219,6 +221,9 @@ def _batch_value(row: BatchRowResult, kind: str, key):
         return row.breakdown.name
     if kind == "id":
         return getattr(row, key) or ""
+    if kind == "num":
+        value = getattr(row, key)
+        return "" if value is None else value
     if kind == "money":
         return _hourly_of(row.breakdown, key)
     return 0  # "zero": an allowance we do not model

@@ -80,6 +80,7 @@ class BatchRowResult(BaseModel):
     supplier: str = ""
     b2b_id: str = ""
     po_number: str = ""
+    po_rate: float | None = None
     contact_name: str = ""
     contact_email: str = ""
     contact_phone: str = ""

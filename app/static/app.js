@@ -230,6 +230,7 @@ const BATCH_COLS = [
     { label: "Supplier", get: (it) => it.supplier || "" },
     { label: "B2B Contractor ID", get: (it) => it.b2b_id || "" },
     { label: "PO Number", get: (it) => it.po_number || "" },
+    { label: "PO Rate (INR)", num: true, get: (it) => (it.po_rate == null ? "" : it.po_rate) },
     { label: "Worker Payroll (Basic)", money: true, get: (it) => hourlyOf(it.breakdown, "basic") },
     { label: "House Rent Allowance (HRA)", money: true, get: (it) => hourlyOf(it.breakdown, "hra") },
     { label: "Gratuity", money: true, get: (it) => hourlyOf(it.breakdown, "gratuity") },
