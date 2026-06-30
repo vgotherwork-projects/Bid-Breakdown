@@ -360,6 +360,41 @@ def test_batch_export_xlsx():
     assert ws["C3"].value == "Ravi Kumar"
 
 
+def test_parse_date_formats():
+    from app.batch import _parse_date
+
+    assert _parse_date("2019-01-05") == date(2019, 1, 5)
+    assert _parse_date("05-01-2019") == date(2019, 1, 5)        # d-m-Y
+    assert _parse_date("05/01/2019") == date(2019, 1, 5)
+    assert _parse_date("28 May 2026") == date(2026, 5, 28)
+    assert _parse_date("28-May-2026") == date(2026, 5, 28)
+    assert _parse_date("2026-05-28 00:00:00") == date(2026, 5, 28)
+    assert _parse_date(43831) == date(2020, 1, 1)               # Excel serial
+    assert _parse_date("not a date") is None
+
+
+_HINT_CSV = (
+    '"S. No.","Name","Date of Joining (yyyy-mm-dd)","CTC"\n'
+    '1,"ADUPA, MANASA",05-01-2019,800000\n'
+)
+
+
+def test_batch_handles_header_hints_and_comma_name():
+    # Header carries a "(yyyy-mm-dd)" hint and the name contains a comma; both
+    # must still parse (previously this reported a missing Date of Joining).
+    res = client.post(
+        "/bids/batch/calculate",
+        files={"file": ("hint.csv", _HINT_CSV.encode(), "text/csv")},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["count"] == 1
+    assert body["errors"] == []
+    first = body["results"][0]
+    assert first["breakdown"]["name"] == "ADUPA, MANASA"
+    assert first["breakdown"]["effective_date_of_joining"] == "2019-01-05"
+
+
 def test_endpoint_existing_requires_doj():
     res = client.post(
         "/bids/calculate",

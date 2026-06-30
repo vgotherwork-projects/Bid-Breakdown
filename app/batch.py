@@ -16,7 +16,7 @@ existing employee, since a date of joining is given.
 import csv
 import io
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from openpyxl import load_workbook
 
@@ -29,7 +29,15 @@ from .bid_schemas import (
 )
 from .calculator import calculate_employee_bid
 
-_DATE_FORMATS = ("%Y-%m-%d", "%Y/%m/%d", "%d-%m-%Y", "%d/%m/%Y", "%d-%b-%Y", "%m/%d/%Y")
+_DATE_FORMATS = (
+    "%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d", "%Y%m%d",
+    "%d-%m-%Y", "%d/%m/%Y", "%d.%m.%Y",
+    "%d-%m-%y", "%d/%m/%y", "%d.%m.%y",
+    "%m/%d/%Y", "%m-%d-%Y",
+    "%d-%b-%Y", "%d %b %Y", "%d-%B-%Y", "%d %B %Y",
+    "%d-%b-%y", "%d %b %y",
+    "%b %d %Y", "%B %d %Y", "%b %d, %Y", "%B %d, %Y",
+)
 
 # Header aliases, stored already normalised (lowercase, alnum tokens, single spaces).
 _HEADER_ALIASES: dict[str, set[str]] = {
@@ -51,7 +59,10 @@ _POSITIONAL = {"sno": 0, "name": 1, "doj": 2, "ctc": 3}
 
 
 def _normalize(text) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", str(text).strip().lower()).strip()
+    # Drop parenthetical hints like "(yyyy-mm-dd)" or "(INR)" so headers such as
+    # "Date of Joining (yyyy-mm-dd)" still match the "date of joining" alias.
+    without_hints = re.sub(r"\([^)]*\)", " ", str(text))
+    return re.sub(r"[^a-z0-9]+", " ", without_hints.strip().lower()).strip()
 
 
 def _parse_date(value) -> date | None:
@@ -61,13 +72,28 @@ def _parse_date(value) -> date | None:
         return value.date()
     if isinstance(value, date):
         return value
-    text = str(value).strip().split(" ")[0]
-    for fmt in _DATE_FORMATS:
-        try:
-            return datetime.strptime(text, fmt).date()
-        except ValueError:
-            continue
-    return None
+    # Excel can hand back a date as its serial number (days since 1899-12-30).
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if 1 <= float(value) <= 60000:
+            return (datetime(1899, 12, 30) + timedelta(days=float(value))).date()
+        return None
+
+    text = str(value).strip()
+    # Try the full text first (covers "28 May 2026"), then with any trailing
+    # time component dropped (covers "2026-05-28 00:00:00").
+    candidates = [text]
+    if " " in text:
+        candidates.append(text.split(" ", 1)[0])
+    for candidate in candidates:
+        for fmt in _DATE_FORMATS:
+            try:
+                return datetime.strptime(candidate, fmt).date()
+            except ValueError:
+                continue
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError:
+        return None
 
 
 def _parse_ctc(value) -> float | None:
