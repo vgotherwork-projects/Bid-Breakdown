@@ -9,7 +9,7 @@ Components
 2. HRA              - 50% of Basic
 3. Conveyance       - fixed 1,600
 4. Medical          - fixed 1,250
-5. Employer PF      - based on Basic (two variations around the 15,000 wage ceiling)
+5. Employer PF      - based on Basic (two variations around the 25,000 wage ceiling)
 6. Special Pay      - balancing figure = CTC/12 - (items 1-5)
    --> Total Earning = sum(1..6) == CTC/12 (monthly), CTC (annual)
 7. Paid time-off    - annual; existing employees only; tenure based
@@ -28,7 +28,7 @@ from .bid_schemas import (
 
 CONVEYANCE_MONTHLY = 1600.0
 MEDICAL_MONTHLY = 1250.0
-PF_WAGE_CEILING = 15000.0
+PF_WAGE_CEILING = 25000.0
 
 # Each tuple is (inclusive upper bound of annual CTC, monthly Basic).
 # CTC at or below the first bound -> 15,000; above the last bound -> 42,000.

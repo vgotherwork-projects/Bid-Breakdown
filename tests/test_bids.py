@@ -39,10 +39,12 @@ def test_basic_slabs(ctc, expected_basic):
 
 
 def test_employer_pf_variations():
-    # Variation 1: basic >= 15000 uses the 15,000 ceiling on the last 0.5%.
-    assert employer_pf(27588) == pytest.approx(27588 * 0.12 + 27588 * 0.005 + 15000 * 0.005)
-    # Variation 2: basic < 15000 uses basic on all three.
+    # Variation 1: basic >= 25000 uses 25,000 on the last 0.5%.
+    assert employer_pf(27588) == pytest.approx(27588 * 0.12 + 27588 * 0.005 + 25000 * 0.005)
+    assert employer_pf(25000) == pytest.approx(25000 * 0.12 + 25000 * 0.005 + 25000 * 0.005)
+    # Variation 2: basic < 25000 uses basic on all three components.
     assert employer_pf(12000) == pytest.approx(12000 * 0.12 + 12000 * 0.005 + 12000 * 0.005)
+    assert employer_pf(24999) == pytest.approx(24999 * 0.12 + 24999 * 0.005 + 24999 * 0.005)
 
 
 def test_new_hire_breakdown_is_exact():
@@ -54,8 +56,8 @@ def test_new_hire_breakdown_is_exact():
     assert r["hra"].monthly == 13794
     assert r["conveyance"].monthly == 1600
     assert r["medical"].monthly == 1250
-    assert r["employer_pf"].monthly == 3523.5
-    assert r["special_pay"].monthly == 52244.5
+    assert r["employer_pf"].monthly == 3573.5
+    assert r["special_pay"].monthly == 52194.5
 
     # Total earning always reconciles to CTC.
     assert r["total_earning"].monthly == 100000
