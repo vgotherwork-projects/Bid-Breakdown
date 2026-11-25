@@ -1,7 +1,7 @@
 import re
 from datetime import date
 
-from fastapi import APIRouter, File, Form, Response, UploadFile
+from fastapi import APIRouter, File, Response, UploadFile
 
 from ..batch import process_batch
 from ..bid_schemas import BatchResult, EmployeeBidBreakdown, EmployeeBidInput
@@ -43,23 +43,17 @@ def export_pdf(bid: EmployeeBidInput) -> Response:
 
 
 @router.post("/batch/calculate", response_model=BatchResult)
-async def batch_calculate(
-    file: UploadFile = File(...),
-    economics_uplift_pct: float = Form(0),
-) -> BatchResult:
+async def batch_calculate(file: UploadFile = File(...)) -> BatchResult:
     """Parse an uploaded file (S.No, Name, DOJ, CTC) and compute every breakdown."""
     data = await file.read()
-    return process_batch(file.filename or "", data, economics_uplift_pct=economics_uplift_pct)
+    return process_batch(file.filename or "", data)
 
 
 @router.post("/batch/export")
-async def batch_export(
-    file: UploadFile = File(...),
-    economics_uplift_pct: float = Form(0),
-) -> Response:
+async def batch_export(file: UploadFile = File(...)) -> Response:
     """Return one wide master sheet: a row per worker, components across columns."""
     data = await file.read()
-    result = process_batch(file.filename or "", data, economics_uplift_pct=economics_uplift_pct)
+    result = process_batch(file.filename or "", data)
     content = batch_to_xlsx(result.results)
     headers = {"Content-Disposition": f'attachment; filename="{_filename("Batch", "xlsx")}"'}
     return Response(content=content, media_type=XLSX_MEDIA_TYPE, headers=headers)

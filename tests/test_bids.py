@@ -119,63 +119,6 @@ def test_markup_is_configurable():
     assert b.billing_rate_per_hour == expected
 
 
-def test_economics_uplift_zero_is_unchanged():
-    bid = EmployeeBidInput(ctc=1_200_000, employment_type="new_hire", as_of_date=date(2024, 1, 1))
-    explicit = EmployeeBidInput(
-        ctc=1_200_000,
-        employment_type="new_hire",
-        as_of_date=date(2024, 1, 1),
-        economics_uplift_pct=0,
-    )
-    a = calculate_employee_bid(bid)
-    b = calculate_employee_bid(explicit)
-    assert a.base_ctc == a.effective_ctc == a.ctc == 1_200_000
-    assert b.grand_total_hourly == a.grand_total_hourly
-    assert b.billing_rate_per_hour == a.billing_rate_per_hour
-
-
-def test_economics_uplift_25_scales_cost_and_ctc():
-    base = calculate_employee_bid(
-        EmployeeBidInput(
-            ctc=1_800_000,
-            employment_type="new_hire",
-            as_of_date=date(2024, 1, 1),
-        )
-    )
-    uplifted = calculate_employee_bid(
-        EmployeeBidInput(
-            ctc=1_800_000,
-            employment_type="new_hire",
-            as_of_date=date(2024, 1, 1),
-            economics_uplift_pct=25,
-        )
-    )
-    assert uplifted.base_ctc == 1_800_000
-    assert uplifted.effective_ctc == 2_250_000
-    assert uplifted.ctc == 2_250_000
-    assert uplifted.basic_monthly == pytest.approx(base.basic_monthly * 1.25)
-    r0 = rows_by_key(base)
-    r1 = rows_by_key(uplifted)
-    # PF's 25,000 wage cap term does not scale with uplift, so PF grows slightly under 25%.
-    assert r1["employer_pf"].monthly == pytest.approx(r0["employer_pf"].monthly * 1.25, rel=0.01)
-    billing_ratio = uplifted.billing_rate_per_hour / base.billing_rate_per_hour
-    assert billing_ratio == pytest.approx(1.25, rel=0.01)
-
-
-def test_batch_accepts_economics_uplift_form_field():
-    res = client.post(
-        "/bids/batch/calculate",
-        data={"economics_uplift_pct": "25"},
-        files={"file": ("batch.csv", _BATCH_CSV.encode(), "text/csv")},
-    )
-    assert res.status_code == 200
-    body = res.json()
-    assert body["count"] >= 1
-    br = body["results"][0]["breakdown"]
-    assert br["economics_uplift_pct"] == 25
-    assert br["effective_ctc"] == pytest.approx(br["base_ctc"] * 1.25, rel=1e-6)
-
-
 def test_existing_employee_pto_and_gratuity():
     doj = date(2017, 6, 1)
     as_of = date(2024, 6, 1)  # ~7 years tenure

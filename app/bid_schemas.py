@@ -32,14 +32,6 @@ class EmployeeBidInput(BaseModel):
     markup_pct: float = Field(
         default=25, ge=0, description="Markup applied to the grand-total per-hour rate to get the billing rate"
     )
-    economics_uplift_pct: float = Field(
-        default=0,
-        ge=0,
-        description=(
-            "Uniform uplift applied to CTC and slab basic (not conveyance/medical). "
-            "0 preserves the original calculation."
-        ),
-    )
 
     @model_validator(mode="after")
     def _check_doj(self) -> "EmployeeBidInput":
@@ -66,10 +58,7 @@ class MoneyRow(BaseModel):
 class EmployeeBidBreakdown(BaseModel):
     name: str
     currency: str
-    ctc: float  # Effective (post-uplift) annual CTC; total earning annual reconciles here.
-    base_ctc: float
-    economics_uplift_pct: float
-    effective_ctc: float
+    ctc: float
     employment_type: EmploymentType
     effective_date_of_joining: date
     tenure_years: float

@@ -6,9 +6,8 @@ and a marked-up billing rate. Ships with a responsive, mobile-friendly UI.
 
 ## Features
 
-- **Inputs:** annual CTC (base), optional **economics uplift %** (0 = original logic),
-  employment type (existing / new hire), date of joining, annual working hours (default 1880),
-  markup % (default 25). Uplift scales base CTC and slab basic together; conveyance and medical stay fixed.
+- **Inputs:** annual CTC, employment type (existing / new hire), date of joining, annual
+  working hours (default 1880), markup % (default 25).
 - **Breakdown (monthly / annual / per-hour):** Basic (CTC slab table), HRA (50% of Basic),
   Conveyance, Medical, Employer PF, Special Pay, Total Earning, Paid Time-Off, Gratuity, Grand Total.
 - **Billing rate** = grand-total per-hour rate × (1 + markup %).
@@ -30,17 +29,6 @@ Open http://127.0.0.1:8000/ · Docs: http://127.0.0.1:8000/docs
 ```powershell
 pytest
 ```
-
-## Rollback (pre–economics uplift)
-
-To restore calculations **before** the economics uplift feature:
-
-```powershell
-git fetch --tags
-git checkout pre-economics-uplift
-```
-
-Or revert the uplift commits on `main` while keeping later fixes. Tag `pre-economics-uplift` marks the last commit with PF 25,000 ceiling only (no uplift field).
 
 ## Run with Docker
 

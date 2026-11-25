@@ -179,7 +179,7 @@ def _rows_from_bytes(filename: str, data: bytes) -> list[list]:
     return [list(row) for row in ws.iter_rows(values_only=True)]
 
 
-def process_batch(filename: str, data: bytes, *, economics_uplift_pct: float = 0) -> BatchResult:
+def process_batch(filename: str, data: bytes) -> BatchResult:
     raw_rows = _rows_from_bytes(filename, data)
     rows = [r for r in raw_rows if any(c not in (None, "") for c in r)]
 
@@ -218,7 +218,6 @@ def process_batch(filename: str, data: bytes, *, economics_uplift_pct: float = 0
                 ctc=ctc,
                 employment_type=EmploymentType.existing,
                 date_of_joining=doj,
-                economics_uplift_pct=economics_uplift_pct,
             )
             breakdown = calculate_employee_bid(bid)
         except Exception as exc:  # noqa: BLE001 - surface row-level failures to the user

@@ -34,23 +34,12 @@
 
             <div class="grid-2">
                 <label class="field">
-                    <span>Annual CTC (base)</span>
+                    <span>Annual CTC</span>
                     <input type="number" id="ctc" value="1200000" min="1" step="1000" inputmode="numeric" />
                 </label>
                 <label class="field">
                     <span>Currency</span>
                     <input type="text" id="currency" value="INR" maxlength="3" autocomplete="off" />
-                </label>
-            </div>
-
-            <div class="grid-2">
-                <label class="field">
-                    <span>Economics uplift %</span>
-                    <input type="number" id="economics_uplift_pct" value="0" min="0" step="0.5" inputmode="decimal" title="Scales base CTC and slab basic; conveyance and medical stay fixed. 0 = original calculation." />
-                </label>
-                <label class="field">
-                    <span class="field-hint">Effective CTC</span>
-                    <output id="effectiveCtc" class="effective-ctc">—</output>
                 </label>
             </div>
 
@@ -139,12 +128,6 @@
                 <strong>Supplier Contact Name / Email / Phone</strong>.
                 Accepts .xlsx or .csv. Each row is treated as an existing employee.
             </p>
-            <div class="grid-2">
-                <label class="field">
-                    <span>Batch economics uplift %</span>
-                    <input type="number" id="batch_economics_uplift_pct" value="0" min="0" step="0.5" inputmode="decimal" />
-                </label>
-            </div>
             <div class="form-actions batch-actions">
                 <input type="file" id="batchFile" accept=".xlsx,.xls,.csv" />
                 <button type="button" id="batchProcessBtn" class="btn primary">Process file</button>
@@ -165,6 +148,6 @@
     <span>Figures are indicative. Statutory rules (PF, gratuity) are simplified for estimation.</span>
 </footer>
 
-<script src="/app.js?v=10"></script>
+<script src="/app.js?v=9"></script>
 </body>
 </html>

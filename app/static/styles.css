@@ -115,18 +115,6 @@ body {
     font-size: 0.74rem; font-weight: 700; color: var(--text-muted);
     text-transform: uppercase; letter-spacing: 0.04em;
 }
-.effective-ctc {
-    display: block;
-    padding: 0.55rem 0.65rem;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    background: #f8fafc;
-    font-weight: 600;
-    min-height: 2.35rem;
-}
-
-.field-hint { color: #64748b; }
-
 .batch-wrap { max-width: 1180px; margin: 0 auto; padding: 0 1.25rem 1rem; }
 @media (max-width: 860px) { .batch-wrap { padding: 0 1rem 1rem; } }
 .batch-actions { align-items: center; gap: 0.75rem; flex-wrap: wrap; }

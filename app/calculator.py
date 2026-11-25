@@ -102,17 +102,12 @@ def calculate_employee_bid(bid: EmployeeBidInput) -> EmployeeBidBreakdown:
         tenure = 1.0
         gratuity_tenure = 1
 
-    base_ctc = bid.ctc
-    uplift = bid.economics_uplift_pct
-    factor = 1.0 + uplift / 100.0
-    effective_ctc = base_ctc * factor
-
-    basic = basic_for_ctc(base_ctc) * factor
+    basic = basic_for_ctc(bid.ctc)
     hra = 0.5 * basic
     conveyance = CONVEYANCE_MONTHLY
     medical = MEDICAL_MONTHLY
     pf = employer_pf(basic)
-    monthly_ctc = effective_ctc / 12
+    monthly_ctc = bid.ctc / 12
     special_pay = monthly_ctc - (basic + hra + conveyance + medical + pf)
 
     total_earning_monthly = basic + hra + conveyance + medical + pf + special_pay
@@ -173,10 +168,7 @@ def calculate_employee_bid(bid: EmployeeBidInput) -> EmployeeBidBreakdown:
     return EmployeeBidBreakdown(
         name=bid.name,
         currency=bid.currency,
-        ctc=_round(effective_ctc),
-        base_ctc=_round(base_ctc),
-        economics_uplift_pct=uplift,
-        effective_ctc=_round(effective_ctc),
+        ctc=bid.ctc,
         employment_type=bid.employment_type,
         effective_date_of_joining=effective_doj,
         tenure_years=_round(tenure),
