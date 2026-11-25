@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0b1f3a">
     <title>Employee Cost &amp; Bid Calculator</title>
-    <link rel="stylesheet" href="/styles.css?v=9">
+    <link rel="stylesheet" href="/styles.css?v=11">
 </head>
 <body>
 <header class="appbar">
@@ -41,6 +41,33 @@
                     <span>Currency</span>
                     <input type="text" id="currency" value="INR" maxlength="3" autocomplete="off" />
                 </label>
+            </div>
+
+            <div class="grid-2">
+                <label class="field">
+                    <span>Reference CTC (for cost/hr proportionality)</span>
+                    <input type="number" id="reference_ctc" min="1" step="1000" inputmode="numeric"
+                           placeholder="Optional baseline" />
+                </label>
+            </div>
+
+            <div class="leave-encashment-panel" id="leaveEncashmentPanel">
+                <h3 class="subpanel-title">Leave encashment (original)</h3>
+                <p class="subpanel-hint">Formula-based paid time-off value at current CTC. Used as the baseline before proportionality adjustment.</p>
+                <dl class="encashment-stats">
+                    <div>
+                        <dt>Annual</dt>
+                        <dd id="leaveEncashAnnual">—</dd>
+                    </div>
+                    <div>
+                        <dt>Monthly</dt>
+                        <dd id="leaveEncashMonthly">—</dd>
+                    </div>
+                    <div>
+                        <dt>Per hour</dt>
+                        <dd id="leaveEncashHourly">—</dd>
+                    </div>
+                </dl>
             </div>
 
             <div class="grid-2">
@@ -121,6 +148,7 @@
             <p class="meta-note">
                 Upload a file with a header row. Required: <strong>Name</strong>,
                 <strong>Date of Joining</strong> (yyyy-mm-dd), <strong>CTC</strong>.
+                Optional: <strong>Reference CTC</strong> (baseline for leave encashment adjustment).
                 Optional, carried through to the output: <strong>S. No.</strong>,
                 <strong>STGI-ID</strong>, <strong>Supplier</strong>,
                 <strong>B2B Contractor ID</strong>, <strong>PO Number</strong>,
@@ -148,6 +176,6 @@
     <span>Figures are indicative. Statutory rules (PF, gratuity) are simplified for estimation.</span>
 </footer>
 
-<script src="/app.js?v=9"></script>
+<script src="/app.js?v=11"></script>
 </body>
 </html>

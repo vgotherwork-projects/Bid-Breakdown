@@ -1,5 +1,5 @@
 const els = {};
-["name", "ctc", "currency", "employment_type", "date_of_joining", "annual_hours", "markup_pct", "errorMsg", "metaNote", "totalBadge", "breakdownBody", "billingRate", "dojField", "resetBtn", "exportXlsxBtn", "exportPdfBtn", "clearBtn", "submitBtn", "batchFile", "batchProcessBtn", "batchExportBtn", "batchError", "batchWarn", "batchResult", "batchHead", "batchBody", "batchCount"].forEach(
+["name", "ctc", "reference_ctc", "currency", "employment_type", "date_of_joining", "annual_hours", "markup_pct", "leaveEncashAnnual", "leaveEncashMonthly", "leaveEncashHourly", "errorMsg", "metaNote", "totalBadge", "breakdownBody", "billingRate", "dojField", "resetBtn", "exportXlsxBtn", "exportPdfBtn", "clearBtn", "submitBtn", "batchFile", "batchProcessBtn", "batchExportBtn", "batchError", "batchWarn", "batchResult", "batchHead", "batchBody", "batchCount"].forEach(
     (id) => (els[id] = document.getElementById(id))
 );
 
@@ -43,6 +43,8 @@ function readInputs() {
     if (hours > 0) payload.annual_hours = hours;
     const markup = Number(els.markup_pct.value || 0);
     if (markup >= 0) payload.markup_pct = markup;
+    const ref = Number(els.reference_ctc?.value || 0);
+    if (ref > 0) payload.reference_ctc = ref;
     return payload;
 }
 
@@ -157,7 +159,17 @@ function render(b) {
     const tenure = b.employment_type === "existing"
         ? `Tenure: <strong>${b.tenure_years} yrs</strong> &middot; Gratuity tenure (rounded): <strong>${b.gratuity_years} yrs</strong> &middot; PTO: <strong>${b.pto_days} days</strong> &middot; `
         : `New hire (DOJ defaulted to ${b.effective_date_of_joining}) &middot; `;
-    els.metaNote.innerHTML = `${tenure}Basic: <strong>${money(b.basic_monthly)}/mo</strong> &middot; Annual hours: <strong>${b.annual_hours}</strong>`;
+    const adjustNote =
+        b.reference_ctc && Math.abs(b.leave_encashment_adjusted_annual - b.leave_encashment_original_annual) > 0.01
+            ? ` &middot; Leave encashment (adjusted in breakdown): <strong>${money(b.leave_encashment_adjusted_annual)}/yr</strong>`
+            : "";
+    els.metaNote.innerHTML = `${tenure}Basic: <strong>${money(b.basic_monthly)}/mo</strong> &middot; Annual hours: <strong>${b.annual_hours}</strong>${adjustNote}`;
+
+    const hours = b.annual_hours || 1880;
+    const origAnnual = b.leave_encashment_original_annual;
+    if (els.leaveEncashAnnual) els.leaveEncashAnnual.textContent = money(origAnnual);
+    if (els.leaveEncashMonthly) els.leaveEncashMonthly.textContent = money(origAnnual / 12);
+    if (els.leaveEncashHourly) els.leaveEncashHourly.textContent = money(origAnnual / hours);
 }
 
 function formatNum2(value) {
@@ -192,9 +204,9 @@ els.employment_type.addEventListener("change", () => {
     toggleDoj();
     scheduleCalc();
 });
-["name", "ctc", "currency", "date_of_joining", "annual_hours", "markup_pct"].forEach((id) =>
-    els[id].addEventListener("input", scheduleCalc)
-);
+["name", "ctc", "reference_ctc", "currency", "date_of_joining", "annual_hours", "markup_pct"].forEach((id) => {
+    if (els[id]) els[id].addEventListener("input", scheduleCalc);
+});
 els.exportXlsxBtn.addEventListener("click", () => exportBreakdown("xlsx"));
 els.exportPdfBtn.addEventListener("click", () => exportBreakdown("pdf"));
 els.submitBtn.addEventListener("click", calculate);
@@ -203,7 +215,11 @@ els.clearBtn.addEventListener("click", clearInputs);
 function clearInputs() {
     els.name.value = "";
     els.ctc.value = "";
+    if (els.reference_ctc) els.reference_ctc.value = "";
     els.date_of_joining.value = "";
+    if (els.leaveEncashAnnual) els.leaveEncashAnnual.textContent = "—";
+    if (els.leaveEncashMonthly) els.leaveEncashMonthly.textContent = "—";
+    if (els.leaveEncashHourly) els.leaveEncashHourly.textContent = "—";
     lastValidPayload = null;
     setExportEnabled(false);
     els.breakdownBody.innerHTML = "";
@@ -222,6 +238,7 @@ els.resetBtn.addEventListener("click", () => {
     els.date_of_joining.value = "";
     els.annual_hours.value = DEFAULTS.annual_hours;
     els.markup_pct.value = DEFAULTS.markup_pct;
+    if (els.reference_ctc) els.reference_ctc.value = "";
     toggleDoj();
     scheduleCalc();
 });

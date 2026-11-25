@@ -45,6 +45,12 @@ _HEADER_ALIASES: dict[str, set[str]] = {
     "name": {"name", "agency worker name", "worker name", "employee name"},
     "doj": {"date of joining", "doj", "joining date", "date of join"},
     "ctc": {"ctc", "annual ctc", "cost to company"},
+    "reference_ctc": {
+        "reference ctc",
+        "reference ctc annual",
+        "baseline ctc",
+        "prior ctc",
+    },
     "stgi_id": {"stgi id", "stg id", "stgid"},
     "supplier": {"supplier", "supplier name"},
     "b2b_id": {"b2b contractor id", "b2b contractor cds id", "b2b id", "b2b contractor"},
@@ -198,6 +204,7 @@ def process_batch(filename: str, data: bytes) -> BatchResult:
         name = str(name_val).strip() if name_val is not None else ""
         doj = _parse_date(_get(cols, "doj", header_map))
         ctc = _parse_ctc(_get(cols, "ctc", header_map))
+        reference_ctc = _parse_ctc(_get(cols, "reference_ctc", header_map))
 
         if not name:
             errors.append(BatchError(row=i, sno=sno, message="Missing name"))
@@ -218,6 +225,7 @@ def process_batch(filename: str, data: bytes) -> BatchResult:
                 ctc=ctc,
                 employment_type=EmploymentType.existing,
                 date_of_joining=doj,
+                reference_ctc=reference_ctc,
             )
             breakdown = calculate_employee_bid(bid)
         except Exception as exc:  # noqa: BLE001 - surface row-level failures to the user

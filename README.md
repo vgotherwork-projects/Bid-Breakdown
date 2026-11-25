@@ -11,6 +11,7 @@ and a marked-up billing rate. Ships with a responsive, mobile-friendly UI.
 - **Breakdown (monthly / annual / per-hour):** Basic (CTC slab table), HRA (50% of Basic),
   Conveyance, Medical, Employer PF, Special Pay, Total Earning, Paid Time-Off, Gratuity, Grand Total.
 - **Billing rate** = grand-total per-hour rate × (1 + markup %).
+- **Leave encashment:** formula PTO in the left panel; optional **Reference CTC** adjusts leave encashment so cost/hour scales with CTC vs the reference (adjusted value in breakdown and exports).
 - Interactive UI at `/`, JSON API at `POST /bids/calculate`, Swagger docs at `/docs`, health at `/health`.
 
 ## Run locally

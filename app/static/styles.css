@@ -251,6 +251,49 @@ input:focus, select:focus { outline: none; border-color: var(--primary); box-sha
 }
 
 /* ---------- Misc ---------- */
+.leave-encashment-panel {
+  margin: 0.75rem 0 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid #dbeafe;
+  background: linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%);
+}
+
+.subpanel-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.subpanel-hint {
+  margin: 0 0 0.65rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.encashment-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.encashment-stats dt {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  margin-bottom: 0.15rem;
+}
+
+.encashment-stats dd {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
 .meta-note { margin: 0; color: var(--text-muted); font-size: 0.82rem; line-height: 1.6; }
 .meta-note strong { color: var(--text); }
 .error {

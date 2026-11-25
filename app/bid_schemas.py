@@ -32,6 +32,14 @@ class EmployeeBidInput(BaseModel):
     markup_pct: float = Field(
         default=25, ge=0, description="Markup applied to the grand-total per-hour rate to get the billing rate"
     )
+    reference_ctc: float | None = Field(
+        default=None,
+        gt=0,
+        description=(
+            "Optional baseline annual CTC. When set and different from ctc, leave encashment "
+            "is adjusted so grand-total per hour scales with ctc / reference_ctc."
+        ),
+    )
 
     @model_validator(mode="after")
     def _check_doj(self) -> "EmployeeBidInput":
@@ -59,6 +67,9 @@ class EmployeeBidBreakdown(BaseModel):
     name: str
     currency: str
     ctc: float
+    reference_ctc: float | None = None
+    leave_encashment_original_annual: float
+    leave_encashment_adjusted_annual: float
     employment_type: EmploymentType
     effective_date_of_joining: date
     tenure_years: float

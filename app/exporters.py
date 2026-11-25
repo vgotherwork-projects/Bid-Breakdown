@@ -125,6 +125,16 @@ def _write_breakdown_sheet(ws, b: EmployeeBidBreakdown) -> None:
     put("B7", "Worker Specific Costs*", fill=_GRAY)
     put("C7", f"Hourly ({_symbol(b.currency)})", fill=_GRAY, bold=True, center=True)
 
+    pto_row = next((row for row in b.rows if row.key == "pto"), None)
+    pto_label = pto_row.label if pto_row else "Paid Time Off"
+    if b.reference_ctc:
+        put("E2", "Reference CTC (annual)", fill=_GRAY)
+        put("F2", round(b.reference_ctc, 2), fill=_GREEN8, numfmt="#,##0.00")
+        put("E3", "Leave encashment (original, annual)", fill=_GRAY)
+        put("F3", round(b.leave_encashment_original_annual, 2), fill=_GREEN8, numfmt="#,##0.00")
+        put("E4", "Leave encashment (adjusted, annual)", fill=_GRAY)
+        put("F4", round(b.leave_encashment_adjusted_annual, 2), fill=_GREEN6, bold=True, numfmt="#,##0.00")
+
     # Component lines: (row, label, value, value-fill, one-off note).
     lines = [
         (8, "Worker Payroll (Basic)", hourly("basic"), _GREEN6, None),
@@ -132,7 +142,7 @@ def _write_breakdown_sheet(ws, b: EmployeeBidBreakdown) -> None:
         (10, "Gratuity", hourly("gratuity"), _GREEN8, "Onetime"),
         (11, "Provident Fund (PF) - Employers Cont.", hourly("employer_pf"), _GREEN6, None),
         (12, "Bonus", 0, _GREEN8, None),
-        (13, "Paid Time Off", hourly("pto"), _GREEN8, "Onetime"),
+        (13, pto_label, hourly("pto"), _GREEN8, "Onetime"),
         (14, "Health Insurance & Life Insurance", hourly("medical"), _GREEN8, None),
         (15, "Driver Allowance", 0, _GREEN8, None),
         (16, "Stationary Allowance", 0, _GREEN8, None),
@@ -310,6 +320,12 @@ def breakdown_to_pdf(b: EmployeeBidBreakdown) -> bytes:
         f"Tenure: {b.tenure_years} yrs   Gratuity yrs: {b.gratuity_years}   "
         f"PTO: {b.pto_days} days   Annual hours: {b.annual_hours}   Markup: {b.markup_pct}%"
     )
+    if b.reference_ctc:
+        meta += (
+            f"\nReference CTC: {b.currency} {b.reference_ctc:,.2f}   "
+            f"Leave encashment original (annual): {b.currency} {b.leave_encashment_original_annual:,.2f}   "
+            f"Leave encashment adjusted (annual): {b.currency} {b.leave_encashment_adjusted_annual:,.2f}"
+        )
     pdf.multi_cell(0, 5, _safe(meta))
     pdf.set_text_color(0, 0, 0)
     pdf.ln(3)

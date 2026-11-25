@@ -119,6 +119,32 @@ def test_markup_is_configurable():
     assert b.billing_rate_per_hour == expected
 
 
+def test_leave_encashment_original_equals_pto_without_reference():
+    bid = EmployeeBidInput(ctc=1_200_000, employment_type="new_hire", as_of_date=date(2024, 1, 1))
+    b = calculate_employee_bid(bid)
+    assert b.leave_encashment_original_annual == rows_by_key(b)["pto"].annual
+    assert b.leave_encashment_adjusted_annual == b.leave_encashment_original_annual
+    assert b.reference_ctc is None
+
+
+def test_proportional_leave_encashment_vs_reference_ctc():
+    ref = calculate_employee_bid(
+        EmployeeBidInput(ctc=1_800_000, employment_type="new_hire", as_of_date=date(2024, 1, 1))
+    )
+    uplifted = calculate_employee_bid(
+        EmployeeBidInput(
+            ctc=2_250_000,
+            reference_ctc=1_800_000,
+            employment_type="new_hire",
+            as_of_date=date(2024, 1, 1),
+        )
+    )
+    ratio = 2_250_000 / 1_800_000
+    assert uplifted.grand_total_hourly == pytest.approx(ref.grand_total_hourly * ratio, rel=0.002)
+    assert uplifted.leave_encashment_adjusted_annual > uplifted.leave_encashment_original_annual
+    assert rows_by_key(uplifted)["pto"].annual == uplifted.leave_encashment_adjusted_annual
+
+
 def test_existing_employee_pto_and_gratuity():
     doj = date(2017, 6, 1)
     as_of = date(2024, 6, 1)  # ~7 years tenure
