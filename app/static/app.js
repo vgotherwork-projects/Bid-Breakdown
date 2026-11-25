@@ -1,5 +1,5 @@
 const els = {};
-["name", "ctc", "currency", "employment_type", "date_of_joining", "annual_hours", "markup_pct", "errorMsg", "metaNote", "totalBadge", "breakdownBody", "billingRate", "dojField", "resetBtn", "exportXlsxBtn", "exportPdfBtn", "clearBtn", "submitBtn", "batchFile", "batchProcessBtn", "batchExportBtn", "batchError", "batchWarn", "batchResult", "batchHead", "batchBody", "batchCount"].forEach(
+["name", "ctc", "currency", "employment_type", "date_of_joining", "annual_hours", "markup_pct", "economics_uplift_pct", "effectiveCtc", "errorMsg", "metaNote", "totalBadge", "breakdownBody", "billingRate", "dojField", "resetBtn", "exportXlsxBtn", "exportPdfBtn", "clearBtn", "submitBtn", "batchFile", "batchProcessBtn", "batchExportBtn", "batch_economics_uplift_pct", "batchError", "batchWarn", "batchResult", "batchHead", "batchBody", "batchCount"].forEach(
     (id) => (els[id] = document.getElementById(id))
 );
 
@@ -14,6 +14,7 @@ const DEFAULTS = {
     date_of_joining: "",
     annual_hours: 1880,
     markup_pct: 25,
+    economics_uplift_pct: 0,
 };
 
 let debounceTimer = null;
@@ -43,7 +44,22 @@ function readInputs() {
     if (hours > 0) payload.annual_hours = hours;
     const markup = Number(els.markup_pct.value || 0);
     if (markup >= 0) payload.markup_pct = markup;
+    const uplift = Number(els.economics_uplift_pct.value || 0);
+    if (uplift > 0) payload.economics_uplift_pct = uplift;
     return payload;
+}
+
+function updateEffectiveCtcPreview() {
+    if (!els.effectiveCtc || !els.ctc) return;
+    const base = Number(els.ctc.value || 0);
+    const uplift = Number(els.economics_uplift_pct.value || 0);
+    if (!base || base <= 0) {
+        els.effectiveCtc.textContent = "—";
+        return;
+    }
+    const effective = base * (1 + Math.max(0, uplift) / 100);
+    const currency = (els.currency.value || "INR").toUpperCase().slice(0, 3);
+    els.effectiveCtc.textContent = formatMoney(effective, currency) + " / yr";
 }
 
 function scheduleCalc() {
@@ -157,7 +173,14 @@ function render(b) {
     const tenure = b.employment_type === "existing"
         ? `Tenure: <strong>${b.tenure_years} yrs</strong> &middot; Gratuity tenure (rounded): <strong>${b.gratuity_years} yrs</strong> &middot; PTO: <strong>${b.pto_days} days</strong> &middot; `
         : `New hire (DOJ defaulted to ${b.effective_date_of_joining}) &middot; `;
-    els.metaNote.innerHTML = `${tenure}Basic: <strong>${money(b.basic_monthly)}/mo</strong> &middot; Annual hours: <strong>${b.annual_hours}</strong>`;
+    const ctcNote =
+        b.economics_uplift_pct > 0
+            ? `Base CTC: <strong>${money(b.base_ctc)}/yr</strong> &middot; Uplift: <strong>${b.economics_uplift_pct}%</strong> &middot; Effective CTC: <strong>${money(b.effective_ctc)}/yr</strong> &middot; `
+            : `CTC: <strong>${money(b.ctc)}/yr</strong> &middot; `;
+    els.metaNote.innerHTML = `${ctcNote}${tenure}Basic: <strong>${money(b.basic_monthly)}/mo</strong> &middot; Annual hours: <strong>${b.annual_hours}</strong>`;
+    if (els.effectiveCtc) {
+        els.effectiveCtc.textContent = formatMoney(b.effective_ctc || b.ctc, b.currency) + " / yr";
+    }
 }
 
 function formatNum2(value) {
@@ -192,9 +215,14 @@ els.employment_type.addEventListener("change", () => {
     toggleDoj();
     scheduleCalc();
 });
-["name", "ctc", "currency", "date_of_joining", "annual_hours", "markup_pct"].forEach((id) =>
-    els[id].addEventListener("input", scheduleCalc)
-);
+["name", "ctc", "currency", "date_of_joining", "annual_hours", "markup_pct", "economics_uplift_pct"].forEach((id) => {
+    if (!els[id]) return;
+    els[id].addEventListener("input", () => {
+        updateEffectiveCtcPreview();
+        scheduleCalc();
+    });
+});
+updateEffectiveCtcPreview();
 els.exportXlsxBtn.addEventListener("click", () => exportBreakdown("xlsx"));
 els.exportPdfBtn.addEventListener("click", () => exportBreakdown("pdf"));
 els.submitBtn.addEventListener("click", calculate);
@@ -203,7 +231,9 @@ els.clearBtn.addEventListener("click", clearInputs);
 function clearInputs() {
     els.name.value = "";
     els.ctc.value = "";
+    if (els.economics_uplift_pct) els.economics_uplift_pct.value = "0";
     els.date_of_joining.value = "";
+    updateEffectiveCtcPreview();
     lastValidPayload = null;
     setExportEnabled(false);
     els.breakdownBody.innerHTML = "";
@@ -222,6 +252,8 @@ els.resetBtn.addEventListener("click", () => {
     els.date_of_joining.value = "";
     els.annual_hours.value = DEFAULTS.annual_hours;
     els.markup_pct.value = DEFAULTS.markup_pct;
+    if (els.economics_uplift_pct) els.economics_uplift_pct.value = DEFAULTS.economics_uplift_pct;
+    updateEffectiveCtcPreview();
     toggleDoj();
     scheduleCalc();
 });
@@ -294,6 +326,8 @@ async function batchProcess() {
     try {
         const form = new FormData();
         form.append("file", file);
+        const batchUplift = Number(els.batch_economics_uplift_pct?.value || 0);
+        form.append("economics_uplift_pct", String(Math.max(0, batchUplift)));
         const res = await fetch("/bids/batch/calculate", { method: "POST", body: form });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
@@ -357,6 +391,8 @@ async function batchExport() {
     try {
         const form = new FormData();
         form.append("file", lastBatchFile);
+        const batchUplift = Number(els.batch_economics_uplift_pct?.value || 0);
+        form.append("economics_uplift_pct", String(Math.max(0, batchUplift)));
         const res = await fetch("/bids/batch/export", { method: "POST", body: form });
         if (!res.ok) throw new Error("Export failed");
         const blob = await res.blob();

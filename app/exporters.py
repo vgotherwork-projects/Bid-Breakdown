@@ -125,6 +125,14 @@ def _write_breakdown_sheet(ws, b: EmployeeBidBreakdown) -> None:
     put("B7", "Worker Specific Costs*", fill=_GRAY)
     put("C7", f"Hourly ({_symbol(b.currency)})", fill=_GRAY, bold=True, center=True)
 
+    if b.economics_uplift_pct > 0:
+        put("E2", "Base CTC (annual)", fill=_GRAY)
+        put("F2", round(b.base_ctc, 2), fill=_GREEN8, numfmt="#,##0.00")
+        put("E3", "Economics uplift", fill=_GRAY)
+        put("F3", round(b.economics_uplift_pct / 100, 4), fill=_GREEN8, numfmt="0.00%")
+        put("E4", "Effective CTC (annual)", fill=_GRAY)
+        put("F4", round(b.effective_ctc, 2), fill=_GREEN6, bold=True, numfmt="#,##0.00")
+
     # Component lines: (row, label, value, value-fill, one-off note).
     lines = [
         (8, "Worker Payroll (Basic)", hourly("basic"), _GREEN6, None),
@@ -292,8 +300,14 @@ def breakdown_to_pdf(b: EmployeeBidBreakdown) -> bytes:
     pdf.cell(0, 9, _safe("Employee Cost & Bid Breakdown"), new_x="LMARGIN", new_y="NEXT")
     pdf.set_x(text_x)
     pdf.set_font("Helvetica", "", 11)
-    pdf.cell(0, 7, _safe(f"{b.name}  -  {b.currency} {b.ctc:,.0f} CTC ({b.employment_type.value})"),
-             new_x="LMARGIN", new_y="NEXT")
+    if b.economics_uplift_pct > 0:
+        ctc_line = (
+            f"{b.name}  -  Base {b.currency} {b.base_ctc:,.0f}  +  "
+            f"{b.economics_uplift_pct:g}% uplift  =  Effective {b.currency} {b.effective_ctc:,.0f}"
+        )
+    else:
+        ctc_line = f"{b.name}  -  {b.currency} {b.ctc:,.0f} CTC ({b.employment_type.value})"
+    pdf.cell(0, 7, _safe(ctc_line), new_x="LMARGIN", new_y="NEXT")
 
     # Ensure content starts below the logo regardless of text height.
     pdf.set_y(max(pdf.get_y(), top_y + 18))
